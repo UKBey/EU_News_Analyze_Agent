@@ -5,131 +5,112 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-# Try to import Gemini, but don't fail if not available
 try:
-    from google import genai
-    from google.genai import types
-    GEMINI_AVAILABLE = True
+    from groq import Groq
+    GROQ_AVAILABLE = True
 except ImportError:
-    print("[WARN] google-genai not installed. Install with: pip install google-genai")
-    GEMINI_AVAILABLE = False
-    genai = None
-    types = None
+    print("[WARN] groq paketi yüklü değil. Yüklemek için: pip install groq")
+    GROQ_AVAILABLE = False
+    Groq = None
 
-# API Key from environment variable
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+GROQ_API_KEY = os.getenv("GROQ_API_KEY")
+GROQ_MODEL = "llama-3.3-70b-versatile"
 
-# Initialize client if available
 client = None
-if GEMINI_AVAILABLE:
+if GROQ_AVAILABLE and GROQ_API_KEY:
     try:
-        client = genai.Client(api_key=GEMINI_API_KEY)
-        print("[OK] Gemini LLM client initialized successfully")
+        client = Groq(api_key=GROQ_API_KEY)
+        print(f"[OK] Groq LLM client initialized ({GROQ_MODEL})")
     except Exception as e:
-        print(f"[WARN] Gemini client initialization failed: {e}")
-        client = None
+        print(f"[WARN] Groq client initialization failed: {e}")
 else:
-    print("[WARN] Running without LLM - using fallback analysis only")
+    if not GROQ_API_KEY:
+        print("[WARN] GROQ_API_KEY bulunamadı. .env dosyasını kontrol et.")
+    print("[WARN] LLM olmadan çalışılıyor — yalnızca fallback analiz kullanılacak.")
+
+
+SYSTEM_PROMPT = """Sen bir endüstriyel haber analistsin. Haberleri analiz edip yapılandırılmış JSON verisi çıkarıyorsun.
+
+OLAY TİPLERİ:
+- relocation: Fabrika/üretim hattının başka lokasyona taşınması
+- closure: Tesis kapanışı, üretim durdurma, işten çıkarma
+- expansion: Mevcut tesisin büyütülmesi, kapasite artışı
+- new_plant: Yeni fabrika/tesis açılışı (greenfield)
+- tender: İhale, tedarik, sözleşme duyurusu
+- other: Yukarıdakilerin hiçbiri
+
+SEKTÖRLER: automotive, technology, manufacturing, energy, logistics, retail, finance, healthcare, construction, agriculture, aerospace, chemicals, food, textiles, electronics
+
+KURALLAR:
+- Bilgi metinde yoksa null kullan (asla tahmin etme)
+- summary_tr MUTLAKA Türkçe olmalı
+- Şirket adını tam yaz
+- Lokasyonları "Şehir, Ülke" formatında yaz
+- SADECE geçerli JSON döndür, başka hiçbir şey yazma"""
 
 
 def analyze_article_with_llm(title: str, content: str) -> dict:
-    """
-    Haberi Gemini'a gönderip, dokümanda istenen yapılandırılmış JSON formatını çeker.
-    """
+    """Haberi Groq LLM ile analiz edip yapılandırılmış JSON döndürür."""
     if not client:
-        print("[WARN] Gemini client not available, using fallback")
         return get_fallback_analysis(title, content)
-    
-    system_instruction = """
-    Sen bir endüstriyel haber analistsin. Görevin haberleri analiz edip yapılandırılmış veri çıkarmak.
-    
-    OLAY TİPLERİ:
-    - relocation: Fabrika/şirket taşınması, yer değiştirme
-    - closure: Fabrika/tesis kapanışı, işten çıkarmalar
-    - expansion: Genişleme, büyüme, yeni yatırım (mevcut tesiste)
-    - new_plant: Yeni fabrika/tesis açılışı
-    - tender: İhale, teklif, sözleşme
-    - other: Yukarıdakilerden hiçbiri (genel haberler, ürün lansmanları, vb.)
-    
-    SEKTÖRLER: automotive, technology, manufacturing, energy, logistics, retail, finance, healthcare, construction, agriculture, aerospace, chemicals, food, textiles, electronics
-    
-    ÖNEMLİ: 
-    - Eğer bilgi metinde yoksa null yaz
-    - Özeti mutlaka Türkçe yaz
-    - Şirket adını tam olarak yaz (kısaltma değil)
-    - Lokasyonları şehir ve ülke olarak belirt
-    """
 
-    prompt = f"""
-    HABER BAŞLIĞI: {title}
-    
-    HABER METNİ: {content[:1000]}
-    
-    Bu haberi analiz et ve SADECE JSON formatında döndür:
-    {{
-      "event_type": "relocation/closure/expansion/new_plant/tender/other seçeneklerinden biri",
-      "summary_tr": "Haberin Türkçe özeti (2-3 cümle)",
-      "company": "Ana şirket adı (yoksa null)",
-      "from_location": "Çıkış yeri: Şehir, Ülke (yoksa null)",
-      "to_location": "Hedef yer: Şehir, Ülke (yoksa null)",
-      "sector": "Sektör adı (yukardaki listeden, yoksa null)",
-      "score": 0,
-      "confidence": 0.0
-    }}
-    
-    ÖRNEKLER:
-    - "Tesla opens new factory in Berlin" → event_type: "new_plant", to_location: "Berlin, Germany", sector: "automotive"
-    - "Amazon expands warehouse in Poland" → event_type: "expansion", to_location: "Poland", sector: "logistics"
-    - "Ford closes UK plant" → event_type: "closure", from_location: "UK", sector: "automotive"
-    """
+    prompt = f"""HABER BAŞLIĞI: {title}
+
+HABER METNİ: {content[:1500]}
+
+Yukarıdaki haberi analiz et ve SADECE aşağıdaki JSON formatında yanıt ver:
+{{
+  "event_type": "relocation/closure/expansion/new_plant/tender/other",
+  "summary_tr": "2-4 cümlelik Türkçe özet",
+  "company": "Şirket adı veya null",
+  "from_location": "Çıkış lokasyonu veya null",
+  "to_location": "Hedef lokasyon veya null",
+  "sector": "Sektör veya null",
+  "score": 0,
+  "confidence": 0.0
+}}"""
 
     try:
-        # Yeni genai SDK sözdizimi
-        response = client.models.generate_content(
-            model='gemini-2.0-flash-lite',
-            contents=prompt,
-            config=types.GenerateContentConfig(
-                system_instruction=system_instruction,
-                temperature=0.3,  # Biraz daha yaratıcı analiz için
-                response_mime_type="application/json",
-            )
+        response = client.chat.completions.create(
+            model=GROQ_MODEL,
+            messages=[
+                {"role": "system", "content": SYSTEM_PROMPT},
+                {"role": "user", "content": prompt},
+            ],
+            response_format={"type": "json_object"},
+            temperature=0.2,
+            max_tokens=512,
         )
-        
-        # Gemini'dan gelen metni Python sözlüğüne çeviriyoruz
-        result = json.loads(response.text)
+        result = json.loads(response.choices[0].message.content)
+        print(f"[OK] Groq analiz tamamlandı: {title[:60]}...")
         return result
 
     except Exception as e:
-        print(f"[ERROR] LLM API error ({type(e).__name__}): {e}")
+        print(f"[ERROR] Groq API hatası ({type(e).__name__}): {e}")
         print(f"[ERROR] Fallback kullanılıyor → başlık: {title[:80]}")
         return get_fallback_analysis(title, content)
 
 
 def get_fallback_analysis(title: str, content: str = "") -> dict:
-    """
-    LLM API'si patlarsa veya timeout yerse çalışacak cankurtaran fonksiyonu.
-    Basit keyword matching ile analiz yapar.
-    """
+    """LLM kullanılamadığında keyword eşleştirme ile temel analiz yapar."""
     title_lower = title.lower()
     content_lower = content.lower() if content else ""
     combined = title_lower + " " + content_lower
-    
+
     event_type = "other"
     sector = None
-    
-    # Event type detection (daha kapsamlı keywords)
-    if any(word in combined for word in ["close", "closes", "closed", "closing", "shut down", "shutdown", "layoff", "layoffs", "closure", "shutting"]):
+
+    if any(w in combined for w in ["close", "closes", "closed", "closing", "shut down", "shutdown", "layoff", "layoffs", "closure", "shutting"]):
         event_type = "closure"
-    elif any(word in combined for word in ["relocate", "relocates", "relocating", "relocation", "move", "moves", "moving", "transfer", "transfers"]):
+    elif any(w in combined for w in ["relocate", "relocates", "relocating", "relocation", "move", "moves", "moving", "transfer", "transfers"]):
         event_type = "relocation"
-    elif any(word in combined for word in ["expand", "expands", "expanding", "expansion", "grow", "grows", "growing", "growth", "invest", "invests", "investment"]):
+    elif any(w in combined for w in ["expand", "expands", "expanding", "expansion", "grow", "grows", "growing", "growth", "invest", "invests", "investment"]):
         event_type = "expansion"
-    elif any(word in combined for word in ["new plant", "new facility", "new factory", "new site", "opening", "opens", "opened", "launch", "launches"]):
+    elif any(w in combined for w in ["new plant", "new facility", "new factory", "new site", "opening", "opens", "opened", "launch", "launches"]):
         event_type = "new_plant"
-    elif any(word in combined for word in ["tender", "tenders", "bid", "bids", "bidding", "contract", "contracts"]):
+    elif any(w in combined for w in ["tender", "tenders", "bid", "bids", "bidding", "contract", "contracts"]):
         event_type = "tender"
 
-    # Sector detection
     sector_keywords = {
         "automotive": ["car", "auto", "vehicle", "tesla", "ford", "bmw", "volkswagen", "toyota"],
         "technology": ["tech", "software", "ai", "digital", "data", "cloud", "microsoft", "google", "apple"],
@@ -139,38 +120,34 @@ def get_fallback_analysis(title: str, content: str = "") -> dict:
         "retail": ["retail", "store", "shop", "supermarket", "mall"],
         "finance": ["bank", "finance", "financial", "investment", "insurance"],
         "aerospace": ["aerospace", "aircraft", "aviation", "airbus", "boeing"],
-        "food": ["food", "beverage", "restaurant", "catering"]
+        "food": ["food", "beverage", "restaurant", "catering"],
     }
-    
     for sector_name, keywords in sector_keywords.items():
-        if any(keyword in combined for keyword in keywords):
+        if any(k in combined for k in keywords):
             sector = sector_name
             break
 
-    # Try to extract company name (improved)
     company = None
+    stopwords = {
+        "the", "a", "an", "in", "on", "at", "to", "for", "of", "and", "or", "but",
+        "how", "why", "what", "when", "where", "which", "who", "is", "are", "was",
+        "your", "my", "our", "their", "this", "that", "these", "those", "from",
+        "with", "will", "can", "may", "its", "by", "new", "all", "just", "not",
+    }
     words = title.split()
     for i, word in enumerate(words):
-        # Look for capitalized words that might be company names
-        if word and len(word) > 2 and word[0].isupper():
-            # Skip common words
-            if word.lower() not in ["the", "a", "an", "in", "on", "at", "to", "for", "of", "and", "or", "but",
-                                     "how", "why", "what", "when", "where", "which", "who", "is", "are", "was",
-                                     "your", "my", "our", "their", "this", "that", "these", "those", "from",
-                                     "with", "will", "can", "may", "its", "by", "new", "all"]:
-                company = word
-                # Check if next word is also capitalized (multi-word company name)
-                if i + 1 < len(words) and words[i + 1][0].isupper():
-                    company = f"{word} {words[i + 1]}"
-                break
+        clean = word.strip("'\".,!?:")
+        if clean and len(clean) > 2 and clean[0].isupper() and clean.lower() not in stopwords:
+            company = clean
+            if i + 1 < len(words) and words[i + 1][0].isupper():
+                company = f"{clean} {words[i + 1].strip('.,!?:')}"
+            break
 
-    # Location detection (basic)
     from_location = None
     to_location = None
-    
     location_keywords = {
         "Germany": ["germany", "german", "berlin", "munich", "frankfurt", "hamburg"],
-        "UK": ["uk", "britain", "british", "london", "scotland", "edinburgh", "manchester"],
+        "UK": ["united kingdom", "britain", "british", "london", "scotland", "edinburgh", "manchester"],
         "France": ["france", "french", "paris", "lyon"],
         "Poland": ["poland", "polish", "warsaw", "krakow"],
         "Turkey": ["turkey", "turkish", "istanbul", "ankara"],
@@ -179,12 +156,13 @@ def get_fallback_analysis(title: str, content: str = "") -> dict:
         "Netherlands": ["netherlands", "dutch", "amsterdam"],
         "Belgium": ["belgium", "belgian", "brussels"],
         "Sweden": ["sweden", "swedish", "stockholm"],
-        "Hungary": ["hungary", "hungarian", "budapest"]
+        "Hungary": ["hungary", "hungarian", "budapest"],
+        "Czech Republic": ["czech", "prague", "brno"],
+        "Romania": ["romania", "romanian", "bucharest"],
+        "Slovakia": ["slovakia", "slovak", "bratislava"],
     }
-    
     for country, keywords in location_keywords.items():
-        # Word-boundary check — "phuket" içindeki "uk" gibi yanlış eşleşmeleri önler
-        if any(re.search(r'\b' + re.escape(keyword) + r'\b', combined) for keyword in keywords):
+        if any(re.search(r'\b' + re.escape(k) + r'\b', combined) for k in keywords):
             if event_type in ["relocation", "closure"]:
                 from_location = country
             else:
@@ -198,6 +176,6 @@ def get_fallback_analysis(title: str, content: str = "") -> dict:
         "from_location": from_location,
         "to_location": to_location,
         "sector": sector,
-        "score": 50,
-        "confidence": 0.3
+        "score": 0,
+        "confidence": 0.0,
     }

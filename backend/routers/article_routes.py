@@ -18,7 +18,10 @@ router = APIRouter(prefix="/api", tags=["Articles"])
 
 
 @router.post("/articles/refresh", response_model=RefreshResponse)
-def refresh_articles(db: Session = Depends(get_db)):
+def refresh_articles(
+    max_per_source: int = Query(5, ge=1, le=20, description="Kaynak başına max haber sayısı (1-20)"),
+    db: Session = Depends(get_db)
+):
     """
     Refresh articles from all active RSS sources.
     Prevents duplicate articles using content_hash.
@@ -36,8 +39,8 @@ def refresh_articles(db: Session = Depends(get_db)):
         sources_checked += 1
         
         try:
-            # Fetch articles from source
-            articles_data = fetch_articles_from_source(source)
+            # Fetch articles from source (limited by max_per_source)
+            articles_data = fetch_articles_from_source(source, max_per_source=max_per_source)
             
             for article_data in articles_data:
                 # Generate content hash

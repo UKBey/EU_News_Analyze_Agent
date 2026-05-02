@@ -189,8 +189,8 @@ export const api = {
     return request<BackendArticle>(`/api/articles/${id}`)
   },
 
-  refreshArticles(): Promise<BackendRefreshResponse> {
-    return request<BackendRefreshResponse>("/api/articles/refresh", {
+  refreshArticles(maxPerSource: number = 5): Promise<BackendRefreshResponse> {
+    return request<BackendRefreshResponse>(`/api/articles/refresh?max_per_source=${maxPerSource}`, {
       method: "POST",
     })
   },

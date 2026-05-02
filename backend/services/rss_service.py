@@ -28,16 +28,16 @@ def validate_rss_url(url: str) -> bool:
         raise ValueError(f"Failed to validate RSS URL: {str(e)}")
 
 
-def fetch_articles_from_source(source) -> List[Dict[str, Any]]:
+def fetch_articles_from_source(source, max_per_source: int = 5) -> List[Dict[str, Any]]:
     """
     Fetch articles from a single RSS source.
-    Returns a list of article dictionaries.
+    Returns a list of article dictionaries (limited to max_per_source).
     """
     try:
         feed = feedparser.parse(source.url)
-        
+
         articles = []
-        for entry in feed.entries:
+        for entry in feed.entries[:max_per_source]:
             # Extract published date
             published_at = None
             if hasattr(entry, 'published_parsed') and entry.published_parsed:

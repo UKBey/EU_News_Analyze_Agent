@@ -456,6 +456,7 @@ export default function Dashboard() {
   const [companyFilter, setCompanyFilter] = useState<string>("all")
   const [sourceFilter, setSourceFilter] = useState<string>("all")
   const [sortOrder, setSortOrder] = useState<"newest" | "oldest">("newest")
+  const [maxPerSource, setMaxPerSource] = useState<number>(5)
   const [isLoading, setIsLoading] = useState(false)
   const [autoRefresh, setAutoRefresh] = useState(false)
   const [lastRefresh, setLastRefresh] = useState<Date | null>(null)
@@ -499,7 +500,7 @@ export default function Dashboard() {
   const fetchNews = useCallback(async () => {
     setIsLoading(true)
     try {
-      const refreshResult = await api.refreshArticles()
+      const refreshResult = await api.refreshArticles(maxPerSource)
       toast.success(`${refreshResult.new_articles} yeni haber eklendi, ${refreshResult.duplicates_skipped} tekrar atlandı`)
       
       // Reload news after refresh
@@ -510,7 +511,7 @@ export default function Dashboard() {
       toast.error('Haberler yenilenemedi')
       setIsLoading(false)
     }
-  }, [loadNews])
+  }, [loadNews, maxPerSource])
 
   // Auto-refresh every 60 seconds
   useEffect(() => {
@@ -645,6 +646,27 @@ export default function Dashboard() {
 
           <div>
             <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 block">
+              Kaynak Başına Max Haber
+            </label>
+            <Select value={String(maxPerSource)} onValueChange={(v) => setMaxPerSource(Number(v))}>
+              <SelectTrigger className="w-full bg-secondary border-border">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="1">1 haber (en az istek)</SelectItem>
+                <SelectItem value="3">3 haber</SelectItem>
+                <SelectItem value="5">5 haber (önerilen)</SelectItem>
+                <SelectItem value="10">10 haber</SelectItem>
+                <SelectItem value="20">20 haber (max)</SelectItem>
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground mt-1">
+              Toplam ≈ {rssSources.length * maxPerSource} AI isteği / yenileme
+            </p>
+          </div>
+
+          <div>
+            <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 block">
               Sıralama
             </label>
             <Select value={sortOrder} onValueChange={(value: "newest" | "oldest") => setSortOrder(value)}>
@@ -711,9 +733,9 @@ export default function Dashboard() {
                 rssSources.map((source) => (
                   <li
                     key={source.id}
-                    className="flex items-center justify-between bg-secondary rounded-lg px-3 py-2 group"
+                    className="flex items-start justify-between bg-secondary rounded-lg px-3 py-2 group overflow-hidden"
                   >
-                    <div className="flex-1 min-w-0">
+                    <div className="flex-1 min-w-0 overflow-hidden">
                       <div className="flex items-center gap-1.5">
                         <p className="text-sm font-medium text-sidebar-foreground truncate">{source.name}</p>
                         <div
