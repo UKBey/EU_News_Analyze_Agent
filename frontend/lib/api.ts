@@ -55,6 +55,39 @@ export interface BackendStats {
   high_score_count: number
   event_type_distribution: Record<string, number>
   last_refresh_at: string | null
+  today_count: number
+  week_count: number
+  top_company: string | null
+  top_country: string | null
+  top_source: string | null
+  avg_score: number | null
+}
+
+export interface BackendScoreBreakdown {
+  event_type_score: number
+  actor_clarity_score: number
+  geography_score: number
+  time_window_score: number
+  source_trust_score: number
+  contribution_E: number
+  contribution_A: number
+  contribution_G: number
+  contribution_T: number
+  contribution_C: number
+  max_E: number
+  max_A: number
+  max_G: number
+  max_T: number
+  max_C: number
+}
+
+export interface BackendNote {
+  id: number
+  article_id: number
+  user_id: string
+  content: string
+  created_at: string
+  updated_at: string
 }
 
 export interface CreateRSSSourcePayload {
@@ -112,11 +145,8 @@ export function convertBackendArticle(article: BackendArticle) {
     to_location: article.to_location,
     sector: article.sector || "Genel",
     score: article.score,
-    // Placeholder image based on event type (backend doesn't store images)
     image: EVENT_TYPE_IMAGES[article.event_type] || EVENT_TYPE_IMAGES.other,
-    // Use raw_summary as full content since backend stores only summary
     full_content: article.raw_summary || article.summary_tr || "İçerik mevcut değil.",
-    // Extra fields for detail page
     link: article.link,
     confidence: article.confidence,
     action_label: article.action_label,
@@ -144,7 +174,6 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
     throw new Error(message)
   }
 
-  // 204 No Content
   if (res.status === 204) return undefined as T
 
   return res.json()
@@ -189,6 +218,14 @@ export const api = {
     return request<BackendArticle>(`/api/articles/${id}`)
   },
 
+  getScoreBreakdown(id: number): Promise<BackendScoreBreakdown> {
+    return request<BackendScoreBreakdown>(`/api/articles/${id}/breakdown`)
+  },
+
+  deleteAllArticles(): Promise<{ message: string }> {
+    return request<{ message: string }>("/api/articles", { method: "DELETE" })
+  },
+
   refreshArticles(maxPerSource: number = 5): Promise<BackendRefreshResponse> {
     return request<BackendRefreshResponse>(`/api/articles/refresh?max_per_source=${maxPerSource}`, {
       method: "POST",
@@ -198,5 +235,28 @@ export const api = {
   // Stats
   getStats(): Promise<BackendStats> {
     return request<BackendStats>("/api/stats")
+  },
+
+  // Notes
+  getNotes(articleId: number, userId: string): Promise<BackendNote[]> {
+    return request<BackendNote[]>(`/api/articles/${articleId}/notes?user_id=${encodeURIComponent(userId)}`)
+  },
+
+  createNote(articleId: number, content: string, userId: string): Promise<BackendNote> {
+    return request<BackendNote>(`/api/articles/${articleId}/notes`, {
+      method: "POST",
+      body: JSON.stringify({ content, user_id: userId }),
+    })
+  },
+
+  updateNote(noteId: number, content: string): Promise<BackendNote> {
+    return request<BackendNote>(`/api/notes/${noteId}`, {
+      method: "PUT",
+      body: JSON.stringify({ content }),
+    })
+  },
+
+  deleteNote(noteId: number): Promise<void> {
+    return request<void>(`/api/notes/${noteId}`, { method: "DELETE" })
   },
 }

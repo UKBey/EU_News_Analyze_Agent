@@ -29,6 +29,7 @@ class Article(Base):
     confidence = Column(Float, default=0.0, nullable=False)
     action_label = Column(String, nullable=True)
     color_label = Column(String, nullable=True)
+    timeline = Column(String, nullable=True)  # "0-6m" | "6-18m" | "18-36m" | null
     
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
 

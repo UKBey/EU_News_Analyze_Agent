@@ -3,40 +3,32 @@
 import { useState, useCallback, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { useTheme } from "next-themes"
-import Image from "next/image"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { ScrollArea } from "@/components/ui/scroll-area"
 import { Switch } from "@/components/ui/switch"
-import { 
-  Building2, 
-  Search, 
-  RefreshCw, 
-  Trash2, 
-  Plus, 
-  ArrowRight, 
-  MapPin, 
-  Newspaper,
-  Package,
-  Factory,
-  TrendingUp,
-  Lock,
-  Moon,
-  Sun,
-  Star,
-  Timer,
-  FileText,
-  CircleDot
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet"
+import { Separator } from "@/components/ui/separator"
+import {
+  Building2, Search, RefreshCw, Trash2, Plus, ArrowRight, MapPin, Newspaper,
+  Package, Factory, TrendingUp, Lock, Moon, Sun, Star, Timer, FileText, CircleDot,
+  Rss, LayoutGrid, LayoutList, X, CalendarDays, Calendar, Globe, BarChart2,
+  AlertTriangle,
 } from "lucide-react"
-import { api, convertBackendArticle, type BackendRSSSource } from "@/lib/api"
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog"
+import { api, convertBackendArticle, type BackendStats } from "@/lib/api"
 import { toast } from "sonner"
 import { stripHtmlTags } from "@/lib/utils"
 
-// Types
+// ─── Types ───────────────────────────────────────────────────────────────────
+
 export interface NewsItem {
   id: number
   title: string
@@ -66,849 +58,927 @@ interface RssSource {
   last_fetched_at: string | null
 }
 
-// Mock data
-export const mockNewsData: NewsItem[] = [
-  {
-    id: 1,
-    title: "BMW, Munih'teki uretim hattini Macaristan'a tasiyor",
-    source: "Reuters",
-    date: "2026-05-01",
-    event_type: "relocation",
-    summary_tr: "BMW, maliyetleri optimize etmek amaciyla Munih'teki bazi motor uretim hatlarini 2026 ilk ceyreginde Debrecen, Macaristan'a tasiyacagini duyurdu.",
-    company: "BMW",
-    from_location: "Munih, Almanya",
-    to_location: "Debrecen, Macaristan",
-    sector: "Otomotiv",
-    score: 99,
-    image: "https://images.unsplash.com/photo-1617531653332-bd46c24f2068?w=800&h=400&fit=crop",
-    full_content: "BMW Group, Almanya'nin Munih kentindeki motor uretim tesislerinin bir kismini Macaristan'in Debrecen sehrine tasima karari aldi. Sirket yetkilileri, bu hamlenin maliyetleri optimize etme ve Dogu Avrupa pazarina daha yakin olma stratejisinin bir parcasi oldugunu belirtti.\n\nTasima isleminin 2026'nin ilk ceyreginde tamamlanmasi planlaniyor. Debrecen'deki yeni tesis, yillik 500.000 motor uretim kapasitesine sahip olacak. Bu gelisme, BMW'nin elektrikli arac donusumu cercevesinde geleneksel icten yanmali motor uretimini yeniden yapilandirma cabasinin bir parcasi.\n\nMacaristan hukumeti, yatirimi desteklemek icin onemli vergi tesvik paketleri sundu. Tasinan uretim hatti, yaklasik 1.200 kisilik istihdam yaratacak."
-  },
-  {
-    id: 2,
-    title: "Bosch yeni bir tesis acilisi planliyor",
-    source: "Bloomberg",
-    date: "2026-04-28",
-    event_type: "new_plant",
-    summary_tr: "Bosch, elektrikli arac bataryalari icin yeni bir tesis kurmayi planliyor ancak lokasyon henuz netlesmedi.",
-    company: "Bosch",
-    from_location: null,
-    to_location: null,
-    sector: "Otomotiv",
-    score: 55,
-    image: "https://images.unsplash.com/photo-1565043589221-1a6fd9ae45c7?w=800&h=400&fit=crop",
-    full_content: "Bosch, elektrikli arac sektorundeki buyumesini desteklemek amaciyla yeni bir batarya uretim tesisi kurmak icin planlama asamasinda oldugunu duyurdu. Sirket, lokasyon secimi icin birkac Avrupa ulkesini degerlendiriyor.\n\nPotansiyel lokasyonlar arasinda Polonya, Cekkya ve Romanya yer aliyor. Yatirim tutarinin 2 milyar Euro'yu asacagi tahmin ediliyor. Tesisin 2028'de tam kapasite ile faaliyete gecmesi hedefleniyor.\n\nBosch CEO'su, 'Elektrikli mobilite donusumunde kritik bir rol ustleniyoruz. Bu tesis, Avrupa'daki batarya tedarik zincirini guclendirmek icin stratejik oneme sahip' dedi."
-  },
-  {
-    id: 3,
-    title: "Siemens, Polonya'da uretim kapasitesini artiriyor",
-    source: "Financial Times",
-    date: "2026-04-25",
-    event_type: "expansion",
-    summary_tr: "Siemens, Polonya Wroclaw'daki tesisinde otomasyon ekipmanlari uretim kapasitesini %40 artiracagini acikladi.",
-    company: "Siemens",
-    from_location: null,
-    to_location: "Wroclaw, Polonya",
-    sector: "Endustriyel Otomasyon",
-    score: 72,
-    image: "https://images.unsplash.com/photo-1581091226825-a6a2a5aee158?w=800&h=400&fit=crop",
-    full_content: "Siemens AG, Polonya'nin Wroclaw sehrindeki endustriyel otomasyon tesisinde onemli bir kapasite artisina gidecegini duyurdu. 800 milyon Euro'luk yatirimla uretim kapasitesi %40 oraninda artacak.\n\nGenisleme projesi kapsaminda yeni uretim hatlari, arastirma-gelistirme merkezi ve lojistik alani insa edilecek. Proje tamamlandiginda 2.000 yeni is imkani olusacak.\n\nSiemens Yonetim Kurulu Uyesi, 'Polonya, Avrupa'daki en onemli uretim merkezlerimizden biri. Bu yatirim, bolgedeki musterlermize daha hizli ve verimli hizmet sunmamizi saglayacak' aciklamasini yapti."
-  },
-  {
-    id: 4,
-    title: "Volkswagen Italya fabrikasini kapatiyor",
-    source: "Der Spiegel",
-    date: "2026-04-20",
-    event_type: "closure",
-    summary_tr: "Volkswagen, Kuzey Italya'daki parca uretim tesisini 2027 sonuna kadar kapatma karari aldi. 850 calisan etkilenecek.",
-    company: "Volkswagen",
-    from_location: "Torino, Italya",
-    to_location: null,
-    sector: "Otomotiv",
-    score: 35,
-    image: "https://images.unsplash.com/photo-1552519507-da3b142c6e3d?w=800&h=400&fit=crop",
-    full_content: "Volkswagen Group, Kuzey Italya'nin Torino kentindeki parca uretim tesisini 2027 sonuna kadar kapatacagini duyurdu. 1978'den beri faaliyet gosteren tesis, yaklasik 850 calisana istihdam sagliyor.\n\nSirket, kapanis kararinin elektrikli arac donusumu ve maliyet optimizasyonu stratejisinin bir parcasi oldugunu belirtti. Etkilenen calisanlara kidem tazminati, erken emeklilik paketleri ve grup ici transfer firsatlari sunulacak.\n\nItalyan sendikalari karara sert tepki gosterdi. Hukumet ise Volkswagen ile istihdam garantileri konusunda muzakere yapilmasi cagrisi yapti. Tesisin uretim fonksiyonlarinin bir kismi Slovakya ve Turkiye'deki fabrikalara transfer edilecek."
-  },
-  {
-    id: 5,
-    title: "Mercedes-Benz Romanya'da yeni fabrika kuruyor",
-    source: "Reuters",
-    date: "2026-04-18",
-    event_type: "new_plant",
-    summary_tr: "Mercedes-Benz, elektrikli arac uretimi icin Romanya Brasov'da yeni bir tesis kuracagini acikladi. 3 milyar Euro yatirim planlaniyor.",
-    company: "Mercedes-Benz",
-    from_location: null,
-    to_location: "Brasov, Romanya",
-    sector: "Otomotiv",
-    score: 92,
-    image: "https://images.unsplash.com/photo-1618843479313-40f8afb4b4d8?w=800&h=400&fit=crop",
-    full_content: "Mercedes-Benz, Romanya'nin Brasov sehrinde elektrikli arac uretimi icin yeni bir fabrika kuracagini duyurdu. 3 milyar Euro'luk yatirimla kurulacak tesis, yillik 200.000 arac uretim kapasitesine sahip olacak."
-  },
-  {
-    id: 6,
-    title: "BMW Cekya'daki tesisi genisletiyor",
-    source: "Handelsblatt",
-    date: "2026-04-15",
-    event_type: "expansion",
-    summary_tr: "BMW, Cekya'daki mevcut tesisinde elektrikli arac batarya uretim hatti eklemeyi planliyor.",
-    company: "BMW",
-    from_location: null,
-    to_location: "Prag, Cekkya",
-    sector: "Otomotiv",
-    score: 78,
-    image: "https://images.unsplash.com/photo-1555215695-3004980ad54e?w=800&h=400&fit=crop",
-    full_content: "BMW, Cekya'nin baskenti Prag yakinlarindaki mevcut tesisine elektrikli arac batarya uretim hatti eklemeyi planliyor. 500 milyon Euro'luk yatirim ile kapasite iki katina cikarilacak."
-  }
-]
+type SortKey = "score_desc" | "score_asc" | "date_desc" | "date_asc"
 
-const initialRssSources: RssSource[] = []
+// ─── Constants ───────────────────────────────────────────────────────────────
 
-// Helper functions
-function getScoreColor(score: number) {
-  if (score >= 80) return { border: "border-l-emerald-500", bg: "bg-emerald-500", text: "text-emerald-600 dark:text-emerald-400", label: "Yüksek Fırsat" }
-  if (score >= 65) return { border: "border-l-blue-500", bg: "bg-blue-500", text: "text-blue-600 dark:text-blue-400", label: "İzlenecek" }
-  if (score >= 50) return { border: "border-l-amber-500", bg: "bg-amber-500", text: "text-amber-600 dark:text-amber-400", label: "Şartlı İlgi" }
-  return { border: "border-l-slate-400", bg: "bg-slate-400", text: "text-slate-500 dark:text-slate-400", label: "Düşük Alaka" }
+const EVENT_CONFIG = {
+  relocation: { label: "Taşınma",    icon: Package,   colorClass: "bg-violet-500",  textClass: "text-violet-600 dark:text-violet-400"  },
+  new_plant:  { label: "Yeni Tesis", icon: Factory,   colorClass: "bg-emerald-500", textClass: "text-emerald-600 dark:text-emerald-400" },
+  expansion:  { label: "Genişleme",  icon: TrendingUp, colorClass: "bg-blue-500",   textClass: "text-blue-600 dark:text-blue-400"       },
+  closure:    { label: "Kapanış",    icon: Lock,      colorClass: "bg-red-500",     textClass: "text-red-600 dark:text-red-400"         },
+  tender:     { label: "İhale",      icon: FileText,  colorClass: "bg-orange-500",  textClass: "text-orange-600 dark:text-orange-400"   },
+  other:      { label: "Diğer",      icon: CircleDot, colorClass: "bg-slate-400",   textClass: "text-slate-500 dark:text-slate-400"     },
+} as const
+
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+
+function getEventConfig(type: NewsItem["event_type"]) {
+  return EVENT_CONFIG[type] ?? EVENT_CONFIG.other
 }
 
-function getEventTypeConfig(eventType: NewsItem["event_type"]) {
-  const config = {
-    relocation: { text: "Taşınma", icon: Package, color: "bg-violet-600" },
-    new_plant: { text: "Yeni Tesis", icon: Factory, color: "bg-emerald-600" },
-    expansion: { text: "Genişleme", icon: TrendingUp, color: "bg-blue-600" },
-    closure: { text: "Kapanış", icon: Lock, color: "bg-red-600" },
-    tender: { text: "İhale", icon: FileText, color: "bg-orange-600" },
-    other: { text: "Diğer", icon: CircleDot, color: "bg-slate-600" }
-  }
-  return config[eventType] || { text: eventType, icon: CircleDot, color: "bg-slate-600" }
+function getScoreMeta(score: number) {
+  if (score >= 80) return { label: "Yüksek Fırsat", ring: "ring-emerald-500", text: "text-emerald-600 dark:text-emerald-400", bar: "bg-emerald-500" }
+  if (score >= 65) return { label: "İzlenecek",     ring: "ring-blue-500",    text: "text-blue-600 dark:text-blue-400",       bar: "bg-blue-500"    }
+  if (score >= 50) return { label: "Şartlı İlgi",   ring: "ring-amber-500",   text: "text-amber-600 dark:text-amber-400",     bar: "bg-amber-500"   }
+  return             { label: "Düşük Alaka",   ring: "ring-slate-300 dark:ring-slate-600", text: "text-slate-500 dark:text-slate-400", bar: "bg-slate-300 dark:bg-slate-600" }
 }
 
 function formatDate(dateStr: string) {
-  const date = new Date(dateStr)
-  return date.toLocaleDateString("tr-TR", { day: "numeric", month: "long", year: "numeric" })
+  return new Date(dateStr).toLocaleDateString("tr-TR", { day: "numeric", month: "short", year: "numeric" })
 }
 
-// Featured News Component (for high score news)
-function FeaturedNewsCard({ news, onClick }: { news: NewsItem; onClick: () => void }) {
-  const scoreColor = getScoreColor(news.score)
-  const eventType = getEventTypeConfig(news.event_type)
-  const EventIcon = eventType.icon
+// ─── AnalyticsCards ──────────────────────────────────────────────────────────
+
+function AnalyticsCards({ stats }: { stats: BackendStats }) {
+  const cards = [
+    {
+      icon: CalendarDays,
+      label: "Bugün",
+      value: stats.today_count,
+      sub: "yeni haber",
+      accent: "text-blue-600 dark:text-blue-400",
+      bg: "bg-blue-50 dark:bg-blue-950/30",
+    },
+    {
+      icon: Calendar,
+      label: "Bu Hafta",
+      value: stats.week_count,
+      sub: "haber",
+      accent: "text-violet-600 dark:text-violet-400",
+      bg: "bg-violet-50 dark:bg-violet-950/30",
+    },
+    {
+      icon: BarChart2,
+      label: "Ort. Skor",
+      value: stats.avg_score != null ? stats.avg_score.toFixed(1) : "—",
+      sub: `${stats.high_score_count} yüksek skorlu`,
+      accent: "text-emerald-600 dark:text-emerald-400",
+      bg: "bg-emerald-50 dark:bg-emerald-950/30",
+    },
+    {
+      icon: Building2,
+      label: "Öne Çıkan Şirket",
+      value: stats.top_company ?? "—",
+      sub: "en çok haber",
+      accent: "text-orange-600 dark:text-orange-400",
+      bg: "bg-orange-50 dark:bg-orange-950/30",
+      truncate: true,
+    },
+    {
+      icon: Globe,
+      label: "Öne Çıkan Ülke",
+      value: stats.top_country ?? "—",
+      sub: "en çok lokasyon",
+      accent: "text-pink-600 dark:text-pink-400",
+      bg: "bg-pink-50 dark:bg-pink-950/30",
+      truncate: true,
+    },
+    {
+      icon: Rss,
+      label: "En Aktif Kaynak",
+      value: stats.top_source ?? "—",
+      sub: "en çok haber",
+      accent: "text-teal-600 dark:text-teal-400",
+      bg: "bg-teal-50 dark:bg-teal-950/30",
+      truncate: true,
+    },
+  ]
 
   return (
-    <Card 
-      className="overflow-hidden hover:shadow-xl transition-all cursor-pointer border-2 border-primary/30 bg-gradient-to-r from-primary/5 to-transparent group"
-      onClick={onClick}
-    >
-      <div className="flex flex-col md:flex-row">
-        {/* Image */}
-        <div className="relative h-56 md:h-auto md:w-80 overflow-hidden shrink-0">
-          <Image
-            src={news.image}
-            alt={news.title}
-            fill
-            className="object-cover group-hover:scale-105 transition-transform duration-300"
-          />
-          <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent" />
-          <div className="absolute top-3 left-3">
-            <Badge className="bg-primary text-primary-foreground border-0 shadow-md gap-1">
-              <Star className="w-3 h-3 fill-current" />
-              One Cikan
-            </Badge>
-          </div>
-        </div>
-
-        <div className="flex-1 p-6">
-          {/* Header */}
-          <div className="flex items-center gap-2 mb-3">
-            <Badge className={`${eventType.color} text-white border-0`}>
-              <EventIcon className="w-3 h-3 mr-1" />
-              {eventType.text}
-            </Badge>
-            <Badge variant="secondary">{news.sector}</Badge>
-            <span className="text-sm text-muted-foreground">{formatDate(news.date)}</span>
-          </div>
-
-          {/* Title */}
-          <h3 className="text-xl font-bold text-foreground mb-3 leading-tight group-hover:text-primary transition-colors">
-            {news.title}
-          </h3>
-
-          {/* Summary */}
-          <p className="text-muted-foreground mb-4 leading-relaxed">{stripHtmlTags(news.summary_tr)}</p>
-
-          {/* Location */}
-          {(news.from_location || news.to_location) && (
-            <div className="flex items-center gap-2 text-sm mb-4">
-              <MapPin className="w-4 h-4 text-primary" />
-              {news.from_location && <span className="text-muted-foreground">{news.from_location}</span>}
-              {news.from_location && news.to_location && <ArrowRight className="w-4 h-4 text-primary" />}
-              {news.to_location && <span className="text-foreground font-medium">{news.to_location}</span>}
+    <section className="space-y-2">
+      <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground px-0.5">
+        Genel Bakış
+      </h2>
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+        {cards.map(({ icon: Icon, label, value, sub, accent, bg, truncate }) => (
+          <Card key={label} className={`p-4 ${bg} border-0`}>
+            <div className="flex items-center gap-2 mb-2">
+              <Icon className={`w-3.5 h-3.5 ${accent} shrink-0`} />
+              <span className="text-xs text-muted-foreground truncate">{label}</span>
             </div>
-          )}
-
-          {/* Footer */}
-          <div className="flex items-center justify-between pt-3 border-t border-border">
-            <div className="flex items-center gap-4 text-sm text-muted-foreground">
-              <span className="flex items-center gap-1.5">
-                <Building2 className="w-4 h-4" />
-                {news.company}
-              </span>
-              <span className="flex items-center gap-1.5">
-                <Newspaper className="w-4 h-4" />
-                {news.source}
-              </span>
-            </div>
-            <div className="flex items-center gap-3">
-              <div className="flex items-center gap-1.5">
-                <div className={`w-2 h-6 ${scoreColor.bg} rounded-full`} />
-                <span className={`text-lg font-bold ${scoreColor.text}`}>{news.score}</span>
-              </div>
-              <span className="text-sm text-primary font-medium group-hover:underline">Devamini Oku</span>
-            </div>
-          </div>
-        </div>
+            <p className={`text-xl font-bold ${accent} leading-tight ${truncate ? "truncate" : ""}`}>
+              {value}
+            </p>
+            <p className="text-xs text-muted-foreground mt-0.5 truncate">{sub}</p>
+          </Card>
+        ))}
       </div>
-    </Card>
+    </section>
   )
 }
 
-// Components
-function NewsCard({ news, onClick }: { news: NewsItem; onClick: () => void }) {
-  const scoreColor = getScoreColor(news.score)
-  const eventType = getEventTypeConfig(news.event_type)
-  const EventIcon = eventType.icon
+// ─── ScoreBadge ──────────────────────────────────────────────────────────────
 
+function ScoreBadge({ score, size = "md" }: { score: number; size?: "sm" | "md" | "lg" }) {
+  const meta = getScoreMeta(score)
+  const sizeClass = {
+    sm: "w-10 h-10 text-sm",
+    md: "w-12 h-12 text-base",
+    lg: "w-16 h-16 text-2xl",
+  }[size]
   return (
-    <Card 
-      className={`overflow-hidden hover:shadow-lg transition-all cursor-pointer ${scoreColor.border} border-l-4 bg-card group`}
-      onClick={onClick}
-    >
-      {/* Image */}
-      <div className="relative h-48 w-full overflow-hidden">
-        <Image
-          src={news.image}
-          alt={news.title}
-          fill
-          className="object-cover group-hover:scale-105 transition-transform duration-300"
-        />
-        <div className="absolute top-3 left-3 flex gap-2">
-          <Badge className={`${eventType.color} text-white border-0 shadow-md`}>
-            <EventIcon className="w-3 h-3 mr-1" />
-            {eventType.text}
-          </Badge>
-        </div>
-        <div className="absolute top-3 right-3 flex items-center gap-1.5 bg-white/95 dark:bg-slate-900/95 backdrop-blur-sm rounded-lg px-2.5 py-1.5 shadow-md">
-          <div className={`w-2 h-6 ${scoreColor.bg} rounded-full`} />
-          <div className="text-right">
-            <div className={`text-lg font-bold ${scoreColor.text}`}>{news.score}</div>
-          </div>
-        </div>
-      </div>
-
-      <div className="p-5">
-        {/* Header */}
-        <div className="flex items-center gap-2 mb-2">
-          <Badge variant="secondary" className="text-xs">{news.sector}</Badge>
-          <span className="text-xs text-muted-foreground">{formatDate(news.date)}</span>
-        </div>
-
-        {/* Title */}
-        <h3 className="text-lg font-semibold text-foreground mb-2 leading-tight group-hover:text-primary transition-colors">
-          {news.title}
-        </h3>
-
-        {/* Summary */}
-        <p className="text-muted-foreground text-sm mb-4 leading-relaxed line-clamp-2">{stripHtmlTags(news.summary_tr)}</p>
-
-        {/* Location */}
-        <div className="mb-4">
-          {news.from_location && news.to_location ? (
-            <div className="flex items-center gap-2 text-sm">
-              <MapPin className="w-4 h-4 text-muted-foreground" />
-              <span className="text-muted-foreground">{news.from_location}</span>
-              <ArrowRight className="w-4 h-4 text-primary" />
-              <span className="text-foreground font-medium">{news.to_location}</span>
-            </div>
-          ) : news.to_location ? (
-            <div className="flex items-center gap-2 text-sm">
-              <MapPin className="w-4 h-4 text-muted-foreground" />
-              <span className="text-foreground font-medium">{news.to_location}</span>
-            </div>
-          ) : news.from_location ? (
-            <div className="flex items-center gap-2 text-sm">
-              <MapPin className="w-4 h-4 text-muted-foreground" />
-              <span className="text-muted-foreground">{news.from_location}</span>
-            </div>
-          ) : (
-            <div className="text-sm text-muted-foreground italic">Lokasyon belirtilmedi</div>
-          )}
-        </div>
-
-        {/* Footer */}
-        <div className="flex items-center justify-between pt-3 border-t border-border">
-          <div className="flex items-center gap-4 text-sm text-muted-foreground">
-            <span className="flex items-center gap-1.5">
-              <Building2 className="w-4 h-4" />
-              {news.company}
-            </span>
-            <span className="flex items-center gap-1.5">
-              <Newspaper className="w-4 h-4" />
-              {news.source}
-            </span>
-          </div>
-          <span className="text-sm text-primary font-medium group-hover:underline">Devamini Oku</span>
-        </div>
-      </div>
-    </Card>
-  )
-}
-
-// Loading Skeleton Component
-function LoadingSkeleton() {
-  return (
-    <div className="space-y-6">
-      {[1, 2, 3].map((i) => (
-        <Card key={i} className="overflow-hidden bg-card">
-          <Skeleton className="h-48 w-full" />
-          <div className="p-5">
-            <div className="flex gap-2 mb-3">
-              <Skeleton className="h-5 w-20" />
-              <Skeleton className="h-5 w-24" />
-            </div>
-            <Skeleton className="h-6 w-3/4 mb-2" />
-            <Skeleton className="h-4 w-full mb-1" />
-            <Skeleton className="h-4 w-2/3 mb-4" />
-            <Skeleton className="h-4 w-48 mb-4" />
-            <div className="flex justify-between pt-3 border-t border-border">
-              <div className="flex gap-4">
-                <Skeleton className="h-4 w-20" />
-                <Skeleton className="h-4 w-24" />
-              </div>
-              <Skeleton className="h-4 w-28" />
-            </div>
-          </div>
-        </Card>
-      ))}
+    <div className={`${sizeClass} rounded-full ring-2 ${meta.ring} bg-background flex items-center justify-center shrink-0`}>
+      <span className={`font-bold leading-none ${meta.text}`}>{score}</span>
     </div>
   )
 }
 
-function EmptyState({ hasFilters, onClearFilters }: { hasFilters: boolean; onClearFilters?: () => void }) {
+// ─── FeaturedCard ────────────────────────────────────────────────────────────
+
+function FeaturedCard({ item, onClick }: { item: NewsItem; onClick: () => void }) {
+  const event = getEventConfig(item.event_type)
+  const score = getScoreMeta(item.score)
+  const EventIcon = event.icon
+
   return (
-    <div className="flex flex-col items-center justify-center py-20 text-center">
-      <div className="w-24 h-24 rounded-full bg-muted flex items-center justify-center mb-6">
-        <Newspaper className="w-12 h-12 text-muted-foreground/50" />
-      </div>
-      <h3 className="text-xl font-semibold text-foreground mb-3">
-        {hasFilters ? "Sonuc bulunamadi" : "Henuz haber yok"}
-      </h3>
-      <p className="text-muted-foreground max-w-md mb-6 leading-relaxed">
-        {hasFilters
-          ? "Arama kriterlerinize uygun haber bulunamadi. Filtreleri degistirmeyi veya tum haberleri gostermeyi deneyin."
-          : "RSS kaynaklarinizi ekleyin ve haberleri cekmeye baslayin."}
-      </p>
-      {hasFilters && onClearFilters && (
-        <div className="flex gap-3">
-          <Button variant="outline" className="gap-2" onClick={onClearFilters}>
-            <RefreshCw className="w-4 h-4" />
-            Filtreleri Temizle
-          </Button>
+    <Card
+      onClick={onClick}
+      className="cursor-pointer group overflow-hidden hover:shadow-lg transition-all duration-200 border-primary/10 hover:border-primary/30"
+    >
+      <div className={`h-1 w-full ${score.bar}`} />
+      <div className="p-5">
+        <div className="flex items-start gap-4">
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 mb-2 flex-wrap">
+              <Badge className={`${event.colorClass} text-white border-0 text-xs gap-1 shrink-0`}>
+                <EventIcon className="w-3 h-3" />
+                {event.label}
+              </Badge>
+              {item.sector && item.sector !== "Genel" && (
+                <Badge variant="outline" className="text-xs shrink-0">{item.sector}</Badge>
+              )}
+              <span className="text-xs text-muted-foreground ml-auto shrink-0">{formatDate(item.date)}</span>
+            </div>
+
+            <h3 className="text-lg font-semibold text-foreground leading-snug mb-2 group-hover:text-primary transition-colors line-clamp-2">
+              {item.title}
+            </h3>
+            <p className="text-sm text-muted-foreground leading-relaxed line-clamp-2 mb-3">
+              {stripHtmlTags(item.summary_tr)}
+            </p>
+
+            {(item.from_location || item.to_location) && (
+              <div className="flex items-center gap-1.5 text-sm text-muted-foreground mb-3">
+                <MapPin className="w-3.5 h-3.5 shrink-0 text-primary" />
+                {item.from_location && <span>{item.from_location}</span>}
+                {item.from_location && item.to_location && <ArrowRight className="w-3.5 h-3.5 text-primary" />}
+                {item.to_location && <span className="font-medium text-foreground">{item.to_location}</span>}
+              </div>
+            )}
+
+            <div className="flex items-center gap-4 text-xs text-muted-foreground pt-3 border-t border-border">
+              {item.company !== "Bilinmiyor" && (
+                <span className="flex items-center gap-1.5 truncate">
+                  <Building2 className="w-3.5 h-3.5 shrink-0" />
+                  <span className="truncate">{item.company}</span>
+                </span>
+              )}
+              <span className="flex items-center gap-1.5 shrink-0">
+                <Newspaper className="w-3.5 h-3.5" />
+                {item.source}
+              </span>
+            </div>
+          </div>
+
+          <ScoreBadge score={item.score} size="lg" />
         </div>
+      </div>
+    </Card>
+  )
+}
+
+// ─── NewsCard ────────────────────────────────────────────────────────────────
+
+function NewsCard({ item, layout, onClick }: { item: NewsItem; layout: "grid" | "list"; onClick: () => void }) {
+  const event = getEventConfig(item.event_type)
+  const score = getScoreMeta(item.score)
+  const EventIcon = event.icon
+
+  if (layout === "list") {
+    return (
+      <Card
+        onClick={onClick}
+        className="cursor-pointer group hover:shadow-md transition-all duration-200 overflow-hidden"
+      >
+        <div className="flex items-stretch">
+          <div className={`w-1 shrink-0 ${score.bar}`} />
+          <div className="flex-1 px-4 py-3 flex items-center gap-4 min-w-0">
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2 mb-1">
+                <Badge className={`${event.colorClass} text-white border-0 text-xs gap-1 shrink-0`}>
+                  <EventIcon className="w-3 h-3" />
+                  {event.label}
+                </Badge>
+                {item.sector && item.sector !== "Genel" && (
+                  <span className="text-xs text-muted-foreground truncate">{item.sector}</span>
+                )}
+              </div>
+              <h3 className="font-medium text-sm text-foreground leading-snug line-clamp-1 group-hover:text-primary transition-colors">
+                {item.title}
+              </h3>
+              <div className="flex items-center gap-3 text-xs text-muted-foreground mt-1 flex-wrap">
+                {item.company !== "Bilinmiyor" && (
+                  <span className="flex items-center gap-1">
+                    <Building2 className="w-3 h-3" />
+                    {item.company}
+                  </span>
+                )}
+                {(item.from_location || item.to_location) && (
+                  <span className="flex items-center gap-1">
+                    <MapPin className="w-3 h-3" />
+                    {item.from_location}{item.from_location && item.to_location && " → "}{item.to_location}
+                  </span>
+                )}
+                <span className="ml-auto shrink-0">{formatDate(item.date)}</span>
+              </div>
+            </div>
+            <ScoreBadge score={item.score} size="sm" />
+          </div>
+        </div>
+      </Card>
+    )
+  }
+
+  return (
+    <Card
+      onClick={onClick}
+      className="cursor-pointer group hover:shadow-md transition-all duration-200 overflow-hidden flex flex-col"
+    >
+      <div className={`h-1 w-full ${score.bar}`} />
+      <div className="p-4 flex-1 flex flex-col">
+        <div className="flex items-start justify-between gap-2 mb-2">
+          <Badge className={`${event.colorClass} text-white border-0 text-xs gap-1`}>
+            <EventIcon className="w-3 h-3" />
+            {event.label}
+          </Badge>
+          <ScoreBadge score={item.score} size="sm" />
+        </div>
+
+        <h3 className="font-semibold text-sm text-foreground leading-snug mb-2 group-hover:text-primary transition-colors line-clamp-2 flex-1">
+          {item.title}
+        </h3>
+
+        <p className="text-xs text-muted-foreground leading-relaxed line-clamp-2 mb-3">
+          {stripHtmlTags(item.summary_tr)}
+        </p>
+
+        {(item.from_location || item.to_location) ? (
+          <div className="flex items-center gap-1 text-xs text-muted-foreground mb-3">
+            <MapPin className="w-3 h-3 shrink-0 text-primary" />
+            {item.from_location && <span>{item.from_location}</span>}
+            {item.from_location && item.to_location && <ArrowRight className="w-3 h-3" />}
+            {item.to_location && <span className="font-medium text-foreground">{item.to_location}</span>}
+          </div>
+        ) : (
+          <div className="mb-3" />
+        )}
+
+        <div className="pt-3 border-t border-border flex items-center justify-between text-xs text-muted-foreground">
+          <span className="flex items-center gap-1 truncate">
+            <Building2 className="w-3 h-3 shrink-0" />
+            <span className="truncate">{item.company}</span>
+          </span>
+          <span className="shrink-0 ml-2">{formatDate(item.date)}</span>
+        </div>
+      </div>
+    </Card>
+  )
+}
+
+// ─── Skeletons ───────────────────────────────────────────────────────────────
+
+function CardSkeleton() {
+  return (
+    <Card className="overflow-hidden">
+      <Skeleton className="h-1 w-full" />
+      <div className="p-4 space-y-2.5">
+        <div className="flex items-start justify-between gap-2">
+          <Skeleton className="h-5 w-24 rounded-full" />
+          <Skeleton className="h-12 w-12 rounded-full shrink-0" />
+        </div>
+        <Skeleton className="h-4 w-full" />
+        <Skeleton className="h-4 w-3/4" />
+        <Skeleton className="h-3 w-full" />
+        <Skeleton className="h-3 w-2/3" />
+        <div className="pt-3 border-t border-border flex justify-between">
+          <Skeleton className="h-3 w-20" />
+          <Skeleton className="h-3 w-16" />
+        </div>
+      </div>
+    </Card>
+  )
+}
+
+// ─── EmptyState ───────────────────────────────────────────────────────────────
+
+function EmptyState({ filtered, onClear }: { filtered: boolean; onClear: () => void }) {
+  return (
+    <div className="flex flex-col items-center justify-center py-24 text-center col-span-full">
+      <div className="w-16 h-16 rounded-2xl bg-muted flex items-center justify-center mb-4">
+        <Newspaper className="w-8 h-8 text-muted-foreground/40" />
+      </div>
+      <h3 className="text-lg font-semibold mb-1">
+        {filtered ? "Sonuç bulunamadı" : "Henüz haber yok"}
+      </h3>
+      <p className="text-sm text-muted-foreground max-w-xs mb-4">
+        {filtered
+          ? "Bu filtrelere uyan haber bulunamadı."
+          : "RSS kaynaklarınızı ekleyin ve Yenile butonuna basın."}
+      </p>
+      {filtered && (
+        <Button variant="outline" size="sm" onClick={onClear}>
+          <X className="w-4 h-4 mr-2" />
+          Filtreleri Temizle
+        </Button>
       )}
     </div>
   )
 }
 
-// Theme Toggle Component
+// ─── ThemeToggle ──────────────────────────────────────────────────────────────
+
 function ThemeToggle() {
   const { theme, setTheme } = useTheme()
   const [mounted, setMounted] = useState(false)
-
-  useEffect(() => {
-    setMounted(true)
-  }, [])
-
-  if (!mounted) {
-    return <div className="w-9 h-9" />
-  }
-
+  useEffect(() => setMounted(true), [])
+  if (!mounted) return <div className="w-9 h-9" />
   return (
     <Button
       variant="ghost"
       size="icon"
       onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
-      className="text-muted-foreground hover:text-foreground"
-      aria-label="Tema degistir"
+      aria-label="Tema değiştir"
     >
       {theme === "dark" ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
     </Button>
   )
 }
 
+// ─── RssPanel (Sheet içeriği) ─────────────────────────────────────────────────
+
+interface RssPanelProps {
+  sources: RssSource[]
+  maxPerSource: number
+  onMaxChange: (v: number) => void
+  onAdd: (name: string, url: string) => Promise<void>
+  onRemove: (id: number) => Promise<void>
+}
+
+function RssPanel({ sources, maxPerSource, onMaxChange, onAdd, onRemove }: RssPanelProps) {
+  const [nameInput, setNameInput] = useState("")
+  const [urlInput, setUrlInput] = useState("")
+
+  const handleAdd = async () => {
+    await onAdd(nameInput, urlInput)
+    setNameInput("")
+    setUrlInput("")
+  }
+
+  return (
+    <div className="flex flex-col gap-5">
+      {/* Add form */}
+      <div className="space-y-2">
+        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Yeni Kaynak Ekle</p>
+        <Input
+          placeholder="Kaynak adı (opsiyonel)"
+          value={nameInput}
+          onChange={e => setNameInput(e.target.value)}
+          className="h-9"
+        />
+        <div className="flex gap-2">
+          <Input
+            type="url"
+            placeholder="https://example.com/feed"
+            value={urlInput}
+            onChange={e => setUrlInput(e.target.value)}
+            onKeyDown={e => e.key === "Enter" && handleAdd()}
+            className="flex-1 h-9"
+          />
+          <Button onClick={handleAdd} size="icon" className="h-9 w-9 shrink-0">
+            <Plus className="w-4 h-4" />
+          </Button>
+        </div>
+      </div>
+
+      <Separator />
+
+      {/* Fetch settings */}
+      <div className="space-y-2">
+        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Çekim Ayarları</p>
+        <div>
+          <label className="text-xs text-muted-foreground mb-1.5 block">Kaynak başına max haber</label>
+          <Select value={String(maxPerSource)} onValueChange={v => onMaxChange(Number(v))}>
+            <SelectTrigger className="h-9">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="1">1 haber (en az istek)</SelectItem>
+              <SelectItem value="3">3 haber</SelectItem>
+              <SelectItem value="5">5 haber (önerilen)</SelectItem>
+              <SelectItem value="10">10 haber</SelectItem>
+              <SelectItem value="20">20 haber (max)</SelectItem>
+            </SelectContent>
+          </Select>
+          <p className="text-xs text-muted-foreground mt-1.5">
+            ≈ {sources.length * maxPerSource} LLM isteği / yenileme
+          </p>
+        </div>
+      </div>
+
+      <Separator />
+
+      {/* Source list */}
+      <div className="flex flex-col gap-2">
+        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+          Kaynaklar ({sources.length})
+        </p>
+        <div>
+          <div className="space-y-2">
+            {sources.length === 0 ? (
+              <p className="text-sm text-muted-foreground italic py-6 text-center">Kaynak eklenmedi</p>
+            ) : (
+              sources.map(src => (
+                <div
+                  key={src.id}
+                  className="flex items-start gap-3 px-3 py-2.5 rounded-lg bg-muted/50 hover:bg-muted transition-colors group"
+                >
+                  <div
+                    className={`w-2 h-2 rounded-full mt-1.5 shrink-0 ${src.is_active ? "bg-emerald-500" : "bg-red-400"}`}
+                    title={src.is_active ? "Aktif" : "Pasif"}
+                  />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium truncate">{src.name}</p>
+                    <p className="text-xs text-muted-foreground truncate">{src.url}</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      {src.last_fetched_at
+                        ? `Son çekim: ${new Date(src.last_fetched_at).toLocaleTimeString("tr-TR", { hour: "2-digit", minute: "2-digit" })}`
+                        : "Henüz çekilmedi"}
+                    </p>
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity shrink-0 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+                    onClick={() => onRemove(src.id)}
+                    aria-label={`${src.name} kaynağını sil`}
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </Button>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      </div>
+
+    </div>
+  )
+}
+
+// ─── Dashboard ────────────────────────────────────────────────────────────────
+
 export default function Dashboard() {
   const router = useRouter()
-  const [news, setNews] = useState<NewsItem[]>([])
-  const [rssSources, setRssSources] = useState<RssSource[]>(initialRssSources)
-  const [rssInput, setRssInput] = useState("")
-  const [rssNameInput, setRssNameInput] = useState("")
-  const [searchTerm, setSearchTerm] = useState("")
-  const [scoreFilter, setScoreFilter] = useState<string>("all")
-  const [eventFilter, setEventFilter] = useState<string>("all")
-  const [companyFilter, setCompanyFilter] = useState<string>("all")
-  const [sourceFilter, setSourceFilter] = useState<string>("all")
-  const [sortOrder, setSortOrder] = useState<"newest" | "oldest">("newest")
-  const [maxPerSource, setMaxPerSource] = useState<number>(5)
-  const [isLoading, setIsLoading] = useState(false)
-  const [autoRefresh, setAutoRefresh] = useState(false)
-  const [lastRefresh, setLastRefresh] = useState<Date | null>(null)
-  const [countdown, setCountdown] = useState(60)
-  const [mounted, setMounted] = useState(false)
 
-  // Set mounted and initial lastRefresh on client only
+  const [news, setNews] = useState<NewsItem[]>([])
+  const [rssSources, setRssSources] = useState<RssSource[]>([])
+  const [stats, setStats] = useState<BackendStats | null>(null)
+  const [searchTerm, setSearchTerm] = useState("")
+  const [eventFilter, setEventFilter] = useState("all")
+  const [scoreFilter, setScoreFilter] = useState("all")
+  const [sourceFilter, setSourceFilter] = useState("all")
+  const [sortKey, setSortKey] = useState<SortKey>("score_desc")
+  const [maxPerSource, setMaxPerSource] = useState(5)
+  const [layout, setLayout] = useState<"grid" | "list">("grid")
+  const [isLoading, setIsLoading] = useState(false)
+  const [isRefreshing, setIsRefreshing] = useState(false)
+  const [rssOpen, setRssOpen] = useState(false)
+  const [autoRefresh, setAutoRefresh] = useState(false)
+  const [countdown, setCountdown] = useState(60)
+  const [lastRefresh, setLastRefresh] = useState<Date | null>(null)
+  const [mounted, setMounted] = useState(false)
+  const [totals, setTotals] = useState({ all: 0, high: 0 })
+
   useEffect(() => {
     setMounted(true)
     loadRSSSources()
     loadNews()
+    loadStats()
   }, [])
 
-  // Load RSS sources from backend
   const loadRSSSources = useCallback(async () => {
     try {
       const sources = await api.getRSSSources()
       setRssSources(sources)
-    } catch (error) {
-      console.error('Failed to load RSS sources:', error)
-      toast.error('RSS kaynaklari yuklenemedi')
+    } catch {
+      toast.error("RSS kaynakları yüklenemedi")
     }
   }, [])
 
-  // Load news from backend
   const loadNews = useCallback(async () => {
     setIsLoading(true)
     try {
-      const response = await api.getArticles({ limit: 100 })
-      const convertedNews = response.items.map(convertBackendArticle)
-      setNews(convertedNews)
+      const res = await api.getArticles({ limit: 200 })
+      const items = res.items.map(convertBackendArticle)
+      setNews(items)
       setLastRefresh(new Date())
-    } catch (error) {
-      console.error('Failed to load news:', error)
-      toast.error('Haberler yuklenemedi')
+      setTotals({ all: items.length, high: items.filter(i => i.score >= 80).length })
+    } catch {
+      toast.error("Haberler yüklenemedi")
     } finally {
       setIsLoading(false)
     }
   }, [])
 
-  const fetchNews = useCallback(async () => {
-    setIsLoading(true)
+  const loadStats = useCallback(async () => {
     try {
-      const refreshResult = await api.refreshArticles(maxPerSource)
-      toast.success(`${refreshResult.new_articles} yeni haber eklendi, ${refreshResult.duplicates_skipped} tekrar atlandı`)
-      
-      // Reload news after refresh
-      await loadNews()
-      setCountdown(60)
-    } catch (error) {
-      console.error('Failed to refresh news:', error)
-      toast.error('Haberler yenilenemedi')
-      setIsLoading(false)
+      const s = await api.getStats()
+      setStats(s)
+    } catch {
+      // stats non-critical, silently ignore
     }
-  }, [loadNews, maxPerSource])
+  }, [])
 
-  // Auto-refresh every 60 seconds
+  const handleDeleteAll = useCallback(async () => {
+    try {
+      const res = await api.deleteAllArticles()
+      toast.success(res.message)
+      setNews([])
+      setTotals({ all: 0, high: 0 })
+      await loadStats()
+    } catch {
+      toast.error("Haberler silinemedi")
+    }
+  }, [loadStats])
+
+  const handleRefresh = useCallback(async () => {
+    setIsRefreshing(true)
+    try {
+      const res = await api.refreshArticles(maxPerSource)
+      toast.success(`${res.new_articles} yeni haber eklendi, ${res.duplicates_skipped} tekrar atlandı`)
+      await loadNews()
+      await loadRSSSources()
+      await loadStats()
+      setCountdown(60)
+    } catch (e: any) {
+      toast.error(e?.message || "Yenileme başarısız", { duration: 6000 })
+    } finally {
+      setIsRefreshing(false)
+    }
+  }, [loadNews, loadRSSSources, loadStats, maxPerSource])
+
   useEffect(() => {
     if (!autoRefresh) return
-
-    const countdownInterval = setInterval(() => {
+    const interval = setInterval(() => {
       setCountdown(prev => {
-        if (prev <= 1) {
-          fetchNews()
-          return 60
-        }
+        if (prev <= 1) { handleRefresh(); return 60 }
         return prev - 1
       })
     }, 1000)
+    return () => clearInterval(interval)
+  }, [autoRefresh, handleRefresh])
 
-    return () => clearInterval(countdownInterval)
-  }, [autoRefresh, fetchNews])
-
-  const addRssSource = useCallback(async () => {
-    if (!rssInput.trim()) {
-      toast.error('Lutfen bir RSS URL\'si girin')
-      return
-    }
-
+  const addSource = async (name: string, url: string) => {
+    if (!url.trim()) { toast.error("URL gerekli"); return }
     try {
-      let name = rssNameInput.trim()
-      if (!name) {
+      const cleanName = name.trim() || (() => {
         try {
-          const urlObj = new URL(rssInput)
-          name = urlObj.hostname.replace("www.", "").split(".")[0]
-          name = name.charAt(0).toUpperCase() + name.slice(1) + " RSS"
-        } catch {
-          name = "Yeni Kaynak"
-        }
-      }
-
-      await api.createRSSSource({ name, url: rssInput })
-      toast.success('RSS kaynagi basariyla eklendi')
-      setRssInput("")
-      setRssNameInput("")
+          const h = new URL(url).hostname.replace("www.", "").split(".")[0]
+          return h.charAt(0).toUpperCase() + h.slice(1) + " RSS"
+        } catch { return "Yeni Kaynak" }
+      })()
+      await api.createRSSSource({ name: cleanName, url })
+      toast.success("Kaynak eklendi")
       await loadRSSSources()
-    } catch (error: any) {
-      console.error('Failed to add RSS source:', error)
-      toast.error(error.message || 'RSS kaynagi eklenemedi')
+    } catch (e: any) {
+      toast.error(e.message || "Kaynak eklenemedi")
     }
-  }, [rssInput, rssNameInput, loadRSSSources])
-
-  const removeRssSource = useCallback(async (id: number) => {
-    try {
-      await api.deleteRSSSource(id)
-      toast.success('RSS kaynagi silindi')
-      await loadRSSSources()
-      await loadNews() // Reload news after deleting source
-    } catch (error) {
-      console.error('Failed to remove RSS source:', error)
-      toast.error('RSS kaynagi silinemedi')
-    }
-  }, [loadRSSSources, loadNews])
-
-  const handleNewsClick = (id: number) => {
-    router.push(`/news/${id}`)
   }
 
-  // Get unique companies for filter dropdown
-  const uniqueCompanies = Array.from(new Set(news.map(item => item.company))).sort()
+  const removeSource = async (id: number) => {
+    try {
+      await api.deleteRSSSource(id)
+      toast.success("Kaynak silindi")
+      await loadRSSSources()
+      await loadNews()
+    } catch {
+      toast.error("Kaynak silinemedi")
+    }
+  }
 
-  const filteredNews = news.filter((item) => {
-    const matchesSearch =
-      !searchTerm ||
-      item.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      item.summary_tr.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      item.company.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (item.from_location && item.from_location.toLowerCase().includes(searchTerm.toLowerCase())) ||
-      (item.to_location && item.to_location.toLowerCase().includes(searchTerm.toLowerCase()))
+  // ── Filter + sort ─────────────────────────────────────────────────────────
 
-    let matchesScore = true
-    if (scoreFilter === "high") matchesScore = item.score >= 80
-    else if (scoreFilter === "watch") matchesScore = item.score >= 65 && item.score < 80
-    else if (scoreFilter === "conditional") matchesScore = item.score >= 50 && item.score < 65
-    else if (scoreFilter === "low") matchesScore = item.score < 50
-
-    const matchesEvent = eventFilter === "all" || item.event_type === eventFilter
-    const matchesCompany = companyFilter === "all" || item.company === companyFilter
-    const matchesSource = sourceFilter === "all" || item.source === sourceFilter
-
-    return matchesSearch && matchesScore && matchesEvent && matchesCompany && matchesSource
+  const filtered = news.filter(item => {
+    if (searchTerm) {
+      const hay = `${item.title} ${item.summary_tr} ${item.company} ${item.from_location ?? ""} ${item.to_location ?? ""}`.toLowerCase()
+      if (!hay.includes(searchTerm.toLowerCase())) return false
+    }
+    if (eventFilter !== "all" && item.event_type !== eventFilter) return false
+    if (sourceFilter !== "all" && item.source !== sourceFilter) return false
+    if (scoreFilter === "high"  && item.score < 80)                      return false
+    if (scoreFilter === "watch" && (item.score < 65 || item.score >= 80)) return false
+    if (scoreFilter === "mid"   && (item.score < 50 || item.score >= 65)) return false
+    if (scoreFilter === "low"   && item.score >= 50)                      return false
+    return true
   })
 
-  // Sort by date
-  const sortedNews = [...filteredNews].sort((a, b) => {
-    const dateA = new Date(a.date).getTime()
-    const dateB = new Date(b.date).getTime()
-    return sortOrder === "newest" ? dateB - dateA : dateA - dateB
+  const sorted = [...filtered].sort((a, b) => {
+    if (sortKey === "score_desc") return b.score - a.score
+    if (sortKey === "score_asc")  return a.score - b.score
+    if (sortKey === "date_desc")  return new Date(b.date).getTime() - new Date(a.date).getTime()
+    return new Date(a.date).getTime() - new Date(b.date).getTime()
   })
 
-  // Separate featured news (score >= 90) from regular news
-  const featuredNews = sortedNews.filter(item => item.score >= 90)
-  const regularNews = sortedNews.filter(item => item.score < 90)
+  const featured = sorted.filter(i => i.score >= 90)
+  const regular  = sorted.filter(i => i.score < 90)
+
+  const hasFilters = searchTerm !== "" || eventFilter !== "all" || scoreFilter !== "all" || sourceFilter !== "all"
+  const clearFilters = () => { setSearchTerm(""); setEventFilter("all"); setScoreFilter("all"); setSourceFilter("all") }
+
+  // ─────────────────────────────────────────────────────────────────────────
 
   return (
-    <div className="flex min-h-screen bg-background">
-      {/* Sidebar */}
-      <aside className="w-72 bg-sidebar border-r border-sidebar-border flex flex-col">
-        <div className="p-4 border-b border-sidebar-border">
-          <h1 className="text-lg font-bold text-sidebar-foreground flex items-center gap-2">
-            <Building2 className="w-6 h-6 text-primary" />
-            Fabrika Tasima Ajani
-          </h1>
-          <p className="text-xs text-muted-foreground mt-1">Avrupa Haber Tarama Sistemi</p>
-        </div>
+    <div className="min-h-screen bg-background">
 
-        {/* Filters - Company & Sort */}
-        <div className="p-4 border-b border-sidebar-border space-y-3">
-          <div>
-            <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 block">
-              Şirket Filtresi
-            </label>
-            <Select value={companyFilter} onValueChange={setCompanyFilter}>
-              <SelectTrigger className="w-full bg-secondary border-border">
-                <SelectValue placeholder="Tüm Şirketler" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Tüm Şirketler</SelectItem>
-                {uniqueCompanies.map((company) => (
-                  <SelectItem key={company} value={company}>
-                    {company}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+      {/* ── Navbar ──────────────────────────────────────────────────────────── */}
+      <header className="sticky top-0 z-40 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80 border-b border-border">
+        <div className="max-w-screen-xl mx-auto px-4 h-14 flex items-center gap-3">
+          {/* Logo */}
+          <div className="flex items-center gap-2 shrink-0 mr-1">
+            <Building2 className="w-6 h-6 text-primary shrink-0" />
+            <span className="font-bold text-foreground text-sm hidden sm:block whitespace-nowrap">
+              EU Endüstri Takip
+            </span>
           </div>
 
-          <div>
-            <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 block">
-              Kaynak Başına Max Haber
-            </label>
-            <Select value={String(maxPerSource)} onValueChange={(v) => setMaxPerSource(Number(v))}>
-              <SelectTrigger className="w-full bg-secondary border-border">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="1">1 haber (en az istek)</SelectItem>
-                <SelectItem value="3">3 haber</SelectItem>
-                <SelectItem value="5">5 haber (önerilen)</SelectItem>
-                <SelectItem value="10">10 haber</SelectItem>
-                <SelectItem value="20">20 haber (max)</SelectItem>
-              </SelectContent>
-            </Select>
-            <p className="text-xs text-muted-foreground mt-1">
-              Toplam ≈ {rssSources.length * maxPerSource} AI isteği / yenileme
-            </p>
-          </div>
-
-          <div>
-            <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 block">
-              Sıralama
-            </label>
-            <Select value={sortOrder} onValueChange={(value: "newest" | "oldest") => setSortOrder(value)}>
-              <SelectTrigger className="w-full bg-secondary border-border">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="newest">En Yeni → En Eski</SelectItem>
-                <SelectItem value="oldest">En Eski → En Yeni</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-
-          {(companyFilter !== "all" || sortOrder !== "newest") && (
-            <Button 
-              variant="outline" 
-              size="sm" 
-              className="w-full"
-              onClick={() => {
-                setCompanyFilter("all")
-                setSortOrder("newest")
-              }}
-            >
-              <RefreshCw className="w-3 h-3 mr-2" />
-              Filtreleri Sıfırla
-            </Button>
-          )}
-        </div>
-
-        {/* RSS Management */}
-        <div className="p-4 flex-1 overflow-hidden flex flex-col">
-          <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-3">RSS Kaynakları</h2>
-
-          {/* Add RSS */}
-          <div className="space-y-2 mb-4">
+          {/* Search */}
+          <div className="flex-1 relative max-w-md">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
             <Input
-              type="text"
-              placeholder="Kaynak adi (opsiyonel)..."
-              value={rssNameInput}
-              onChange={(e) => setRssNameInput(e.target.value)}
-              className="flex-1 bg-secondary border-border"
+              placeholder="Şirket, yer, olay ara..."
+              value={searchTerm}
+              onChange={e => setSearchTerm(e.target.value)}
+              className="pl-9 h-9 bg-muted/50 border-muted focus-visible:border-border focus-visible:bg-background"
             />
-            <div className="flex gap-2">
-              <Input
-                type="url"
-                placeholder="RSS URL'si girin..."
-                value={rssInput}
-                onChange={(e) => setRssInput(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && addRssSource()}
-                className="flex-1 bg-secondary border-border"
-              />
-              <Button onClick={addRssSource} size="icon" className="bg-primary hover:bg-primary/90">
-                <Plus className="w-4 h-4" />
+            {searchTerm && (
+              <Button
+                variant="ghost"
+                size="icon"
+                className="absolute right-1 top-1/2 -translate-y-1/2 h-7 w-7 text-muted-foreground"
+                onClick={() => setSearchTerm("")}
+              >
+                <X className="w-3.5 h-3.5" />
               </Button>
-            </div>
-          </div>
-
-          {/* RSS List */}
-          <ScrollArea className="flex-1">
-            <ul className="space-y-2">
-              {rssSources.length === 0 ? (
-                <li className="text-sm text-muted-foreground italic py-2">Henüz kaynak eklenmedi</li>
-              ) : (
-                rssSources.map((source) => (
-                  <li
-                    key={source.id}
-                    className="flex items-start justify-between bg-secondary rounded-lg px-3 py-2 group overflow-hidden"
-                  >
-                    <div className="flex-1 min-w-0 overflow-hidden">
-                      <div className="flex items-center gap-1.5">
-                        <p className="text-sm font-medium text-sidebar-foreground truncate">{source.name}</p>
-                        <div
-                          className={`w-2 h-2 rounded-full shrink-0 ${source.is_active ? "bg-emerald-500" : "bg-red-400"}`}
-                          title={source.is_active ? "Aktif" : "Pasif"}
-                        />
-                      </div>
-                      <p className="text-xs text-muted-foreground truncate">{source.url}</p>
-                      <p className="text-xs text-muted-foreground">
-                        {source.last_fetched_at
-                          ? `Son çekim: ${new Date(source.last_fetched_at).toLocaleTimeString("tr-TR", { hour: "2-digit", minute: "2-digit" })}`
-                          : "Henüz çekilmedi"}
-                      </p>
-                    </div>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="ml-2 h-8 w-8 text-muted-foreground hover:text-destructive hover:bg-destructive/10 shrink-0"
-                      onClick={() => removeRssSource(source.id)}
-                      aria-label={`${source.name} kaynağını sil`}
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </Button>
-                  </li>
-                ))
-              )}
-            </ul>
-          </ScrollArea>
-        </div>
-
-        {/* Footer */}
-        <div className="p-4 border-t border-sidebar-border">
-          <p className="text-xs text-muted-foreground">v1.0.0 MVP - Hackathon 2026</p>
-        </div>
-      </aside>
-
-      {/* Main Content */}
-      <main className="flex-1 flex flex-col">
-        {/* Header */}
-        <header className="bg-sidebar border-b border-sidebar-border p-4">
-          <div className="flex flex-wrap items-center gap-4">
-            {/* Search */}
-            <div className="flex-1 min-w-64 relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
-              <Input
-                type="text"
-                placeholder="Haberlerde ara..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-10 bg-secondary border-border"
-              />
-            </div>
-
-            {/* Filters */}
-            <div className="flex items-center gap-3">
-              <Select value={scoreFilter} onValueChange={setScoreFilter}>
-                <SelectTrigger className="w-44 bg-secondary border-border">
-                  <SelectValue placeholder="Tum Skorlar" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Tum Skorlar</SelectItem>
-                  <SelectItem value="high">Yuksek (80-100)</SelectItem>
-                  <SelectItem value="watch">Izlenecek (65-79)</SelectItem>
-                  <SelectItem value="conditional">Sartli (50-64)</SelectItem>
-                  <SelectItem value="low">Dusuk (0-49)</SelectItem>
-                </SelectContent>
-              </Select>
-
-              <Select value={eventFilter} onValueChange={setEventFilter}>
-                <SelectTrigger className="w-40 bg-secondary border-border">
-                  <SelectValue placeholder="Tum Olaylar" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Tum Olaylar</SelectItem>
-                  <SelectItem value="relocation">Tasinma</SelectItem>
-                  <SelectItem value="new_plant">Yeni Tesis</SelectItem>
-                  <SelectItem value="expansion">Genisleme</SelectItem>
-                  <SelectItem value="closure">Kapanis</SelectItem>
-                  <SelectItem value="tender">Ihale</SelectItem>
-                  <SelectItem value="other">Diger</SelectItem>
-                </SelectContent>
-              </Select>
-
-              <Select value={sourceFilter} onValueChange={setSourceFilter}>
-                <SelectTrigger className="w-40 bg-secondary border-border">
-                  <SelectValue placeholder="Tüm Kaynaklar" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Tüm Kaynaklar</SelectItem>
-                  {rssSources.map((s) => (
-                    <SelectItem key={s.id} value={s.name}>{s.name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-
-              {/* Auto Refresh Toggle */}
-              <div className="flex items-center gap-2 px-3 py-2 bg-secondary rounded-lg">
-                <Timer className="w-4 h-4 text-muted-foreground" />
-                <span className="text-sm text-muted-foreground">Otomatik</span>
-                <Switch
-                  checked={autoRefresh}
-                  onCheckedChange={setAutoRefresh}
-                  aria-label="Otomatik yenileme"
-                />
-                {autoRefresh && (
-                  <span className="text-xs font-mono text-primary min-w-8">{countdown}s</span>
-                )}
-              </div>
-
-              <Button onClick={fetchNews} disabled={isLoading} className="bg-primary hover:bg-primary/90">
-                <RefreshCw className={`w-5 h-5 mr-2 ${isLoading ? "animate-spin" : ""}`} />
-                Yenile
-              </Button>
-
-              {/* Theme Toggle */}
-              <ThemeToggle />
-            </div>
-          </div>
-
-          {/* Last refresh info */}
-          <div className="mt-2 text-xs text-muted-foreground">
-            Son guncelleme: {mounted && lastRefresh ? lastRefresh.toLocaleTimeString("tr-TR") : "--:--:--"}
-          </div>
-        </header>
-
-        {/* News Feed */}
-        <div className="flex-1 overflow-y-auto p-6 bg-background">
-          <div className="max-w-4xl mx-auto space-y-6">
-            {isLoading ? (
-              <LoadingSkeleton />
-            ) : sortedNews.length === 0 ? (
-              <EmptyState
-                hasFilters={searchTerm !== "" || scoreFilter !== "all" || eventFilter !== "all" || companyFilter !== "all" || sourceFilter !== "all"}
-                onClearFilters={() => {
-                  setSearchTerm("")
-                  setScoreFilter("all")
-                  setEventFilter("all")
-                  setCompanyFilter("all")
-                  setSourceFilter("all")
-                  setSortOrder("newest")
-                }}
-              />
-            ) : (
-              <>
-                {/* Featured News Section */}
-                {featuredNews.length > 0 && (
-                  <div className="space-y-4">
-                    <h2 className="text-lg font-semibold text-foreground flex items-center gap-2">
-                      <Star className="w-5 h-5 text-primary fill-primary" />
-                      One Cikan Firsatlar
-                    </h2>
-                    {featuredNews.map((item) => (
-                      <FeaturedNewsCard key={item.id} news={item} onClick={() => handleNewsClick(item.id)} />
-                    ))}
-                  </div>
-                )}
-
-                {/* Regular News */}
-                {regularNews.length > 0 && (
-                  <div className="space-y-4">
-                    {featuredNews.length > 0 && (
-                      <h2 className="text-lg font-semibold text-foreground mt-8">Diger Haberler</h2>
-                    )}
-                    {regularNews.map((item) => (
-                      <NewsCard key={item.id} news={item} onClick={() => handleNewsClick(item.id)} />
-                    ))}
-                  </div>
-                )}
-              </>
             )}
           </div>
+
+          <div className="flex-1" />
+
+          {/* Auto-refresh toggle */}
+          <div className="hidden md:flex items-center gap-2 px-3 py-1.5 rounded-lg bg-muted/50 text-sm">
+            <Timer className="w-3.5 h-3.5 text-muted-foreground" />
+            <span className="text-xs text-muted-foreground">Oto</span>
+            <Switch checked={autoRefresh} onCheckedChange={setAutoRefresh} className="scale-90" />
+            {autoRefresh && (
+              <span className="text-xs font-mono text-primary w-6 text-right">{countdown}s</span>
+            )}
+          </div>
+
+          {/* RSS button */}
+          <Button
+            variant="outline"
+            size="sm"
+            className="gap-2 h-9"
+            onClick={() => setRssOpen(true)}
+          >
+            <Rss className="w-4 h-4" />
+            <span className="hidden sm:inline text-xs">RSS Kaynakları</span>
+            {rssSources.length > 0 && (
+              <Badge variant="secondary" className="ml-0.5 text-xs px-1.5 py-0 h-4">
+                {rssSources.length}
+              </Badge>
+            )}
+          </Button>
+
+          {/* Refresh */}
+          <Button
+            size="sm"
+            onClick={handleRefresh}
+            disabled={isRefreshing || isLoading}
+            className="gap-2 h-9"
+          >
+            <RefreshCw className={`w-4 h-4 ${isRefreshing ? "animate-spin" : ""}`} />
+            <span className="hidden sm:inline text-xs">Yenile</span>
+          </Button>
+
+          <ThemeToggle />
         </div>
+      </header>
+
+      {/* ── Stats strip ─────────────────────────────────────────────────────── */}
+      <div className="bg-muted/30 border-b border-border">
+        <div className="max-w-screen-xl mx-auto px-4 py-2 flex items-center gap-5 overflow-x-auto">
+          <div className="flex items-center gap-1.5 text-sm shrink-0">
+            <Newspaper className="w-3.5 h-3.5 text-muted-foreground" />
+            <span className="text-muted-foreground">Toplam:</span>
+            <span className="font-semibold">{totals.all}</span>
+          </div>
+          <div className="flex items-center gap-1.5 text-sm shrink-0">
+            <Star className="w-3.5 h-3.5 text-emerald-500 fill-emerald-500" />
+            <span className="text-muted-foreground">Yüksek fırsat:</span>
+            <span className="font-semibold text-emerald-600 dark:text-emerald-400">{totals.high}</span>
+          </div>
+          <div className="flex items-center gap-1.5 text-sm shrink-0">
+            <Rss className="w-3.5 h-3.5 text-primary" />
+            <span className="text-muted-foreground">Kaynak:</span>
+            <span className="font-semibold">{rssSources.length}</span>
+          </div>
+          <div className="flex items-center gap-1.5 text-sm shrink-0 ml-auto">
+            <span className="text-muted-foreground text-xs">Son güncelleme:</span>
+            <span className="font-mono text-xs">
+              {mounted && lastRefresh ? lastRefresh.toLocaleTimeString("tr-TR") : "--:--:--"}
+            </span>
+          </div>
+        </div>
+      </div>
+
+      {/* ── Filter bar ──────────────────────────────────────────────────────── */}
+      <div className="sticky top-14 z-30 bg-background border-b border-border">
+        <div className="max-w-screen-xl mx-auto px-4 py-2 flex items-center gap-2 flex-wrap">
+          {/* Event type */}
+          <Select value={eventFilter} onValueChange={setEventFilter}>
+            <SelectTrigger className="h-8 w-auto min-w-0 text-xs bg-muted/50 border-transparent hover:bg-muted">
+              <SelectValue placeholder="Olay Tipi" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Tüm Olaylar</SelectItem>
+              {(Object.entries(EVENT_CONFIG) as [string, typeof EVENT_CONFIG[keyof typeof EVENT_CONFIG]][]).map(([k, v]) => (
+                <SelectItem key={k} value={k}>{v.label}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+
+          {/* Score */}
+          <Select value={scoreFilter} onValueChange={setScoreFilter}>
+            <SelectTrigger className="h-8 w-auto min-w-0 text-xs bg-muted/50 border-transparent hover:bg-muted">
+              <SelectValue placeholder="Skor" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Tüm Skorlar</SelectItem>
+              <SelectItem value="high">⭐ Yüksek Fırsat (80–100)</SelectItem>
+              <SelectItem value="watch">👁 İzlenecek (65–79)</SelectItem>
+              <SelectItem value="mid">⚡ Şartlı (50–64)</SelectItem>
+              <SelectItem value="low">— Düşük (0–49)</SelectItem>
+            </SelectContent>
+          </Select>
+
+          {/* Source */}
+          <Select value={sourceFilter} onValueChange={setSourceFilter}>
+            <SelectTrigger className="h-8 w-auto min-w-0 text-xs bg-muted/50 border-transparent hover:bg-muted">
+              <SelectValue placeholder="Kaynak" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Tüm Kaynaklar</SelectItem>
+              {rssSources.map(s => (
+                <SelectItem key={s.id} value={s.name}>{s.name}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+
+          {hasFilters && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-8 text-xs text-muted-foreground px-2"
+              onClick={clearFilters}
+            >
+              <X className="w-3 h-3 mr-1" />
+              Temizle
+            </Button>
+          )}
+
+          <div className="flex-1" />
+
+          {/* Sort */}
+          <Select value={sortKey} onValueChange={v => setSortKey(v as SortKey)}>
+            <SelectTrigger className="h-8 w-auto min-w-0 text-xs bg-muted/50 border-transparent hover:bg-muted">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="score_desc">Skor: Yüksek → Düşük</SelectItem>
+              <SelectItem value="score_asc">Skor: Düşük → Yüksek</SelectItem>
+              <SelectItem value="date_desc">Tarih: Yeni → Eski</SelectItem>
+              <SelectItem value="date_asc">Tarih: Eski → Yeni</SelectItem>
+            </SelectContent>
+          </Select>
+
+          {/* View toggle */}
+          <div className="flex items-center rounded-md border border-border overflow-hidden shrink-0">
+            <Button
+              variant="ghost"
+              size="icon"
+              className={`h-8 w-8 rounded-none border-0 ${layout === "grid" ? "bg-muted" : ""}`}
+              onClick={() => setLayout("grid")}
+              aria-label="Grid görünüm"
+            >
+              <LayoutGrid className="w-3.5 h-3.5" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              className={`h-8 w-8 rounded-none border-0 ${layout === "list" ? "bg-muted" : ""}`}
+              onClick={() => setLayout("list")}
+              aria-label="Liste görünüm"
+            >
+              <LayoutList className="w-3.5 h-3.5" />
+            </Button>
+          </div>
+
+          <span className="text-xs text-muted-foreground shrink-0">{sorted.length} haber</span>
+        </div>
+      </div>
+
+      {/* ── Content ─────────────────────────────────────────────────────────── */}
+      <main className="max-w-screen-xl mx-auto px-4 py-6 space-y-8">
+        {/* Analytics cards */}
+        {stats && <AnalyticsCards stats={stats} />}
+
+        {isLoading ? (
+          <div className={`grid gap-4 ${layout === "grid" ? "grid-cols-1 sm:grid-cols-2 lg:grid-cols-3" : "grid-cols-1"}`}>
+            {Array.from({ length: 9 }).map((_, i) => <CardSkeleton key={i} />)}
+          </div>
+        ) : sorted.length === 0 ? (
+          <EmptyState filtered={hasFilters} onClear={clearFilters} />
+        ) : (
+          <>
+            {/* Featured section */}
+            {featured.length > 0 && (
+              <section className="space-y-3">
+                <div className="flex items-center gap-2">
+                  <Star className="w-4 h-4 text-amber-500 fill-amber-400" />
+                  <h2 className="text-sm font-semibold uppercase tracking-wider text-foreground">
+                    Öne Çıkan Fırsatlar
+                  </h2>
+                  <Badge variant="secondary" className="text-xs px-2 py-0">{featured.length}</Badge>
+                </div>
+                <div className="space-y-3">
+                  {featured.map(item => (
+                    <FeaturedCard
+                      key={item.id}
+                      item={item}
+                      onClick={() => router.push(`/news/${item.id}`)}
+                    />
+                  ))}
+                </div>
+              </section>
+            )}
+
+            {/* Regular news */}
+            {regular.length > 0 && (
+              <section className="space-y-3">
+                {featured.length > 0 && (
+                  <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">
+                    Diğer Haberler
+                    <Badge variant="outline" className="ml-2 text-xs px-2 py-0 font-normal">{regular.length}</Badge>
+                  </h2>
+                )}
+                <div className={`grid gap-4 ${layout === "grid" ? "grid-cols-1 sm:grid-cols-2 lg:grid-cols-3" : "grid-cols-1"}`}>
+                  {regular.map(item => (
+                    <NewsCard
+                      key={item.id}
+                      item={item}
+                      layout={layout}
+                      onClick={() => router.push(`/news/${item.id}`)}
+                    />
+                  ))}
+                </div>
+              </section>
+            )}
+          </>
+        )}
       </main>
+
+      {/* ── RSS Sheet ───────────────────────────────────────────────────────── */}
+      <Sheet open={rssOpen} onOpenChange={setRssOpen}>
+        <SheetContent side="right" className="w-full sm:max-w-md overflow-y-auto">
+          <SheetHeader className="pb-4 border-b border-border">
+            <SheetTitle className="flex items-center gap-2 text-base">
+              <Rss className="w-4 h-4 text-primary" />
+              RSS Kaynakları
+            </SheetTitle>
+          </SheetHeader>
+          <div className="py-4">
+            <RssPanel
+              sources={rssSources}
+              maxPerSource={maxPerSource}
+              onMaxChange={setMaxPerSource}
+              onAdd={addSource}
+              onRemove={removeSource}
+            />
+          </div>
+        </SheetContent>
+      </Sheet>
     </div>
   )
 }

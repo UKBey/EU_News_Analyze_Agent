@@ -6,10 +6,10 @@ from datetime import datetime
 import time
 from database import get_db
 from models import RSSSource, Article
-from schemas import ArticleResponse, ArticleListResponse, RefreshResponse, StatsResponse
+from schemas import ArticleResponse, ArticleListResponse, RefreshResponse, StatsResponse, ScoreBreakdownResponse
 from services import fetch_articles_from_source, generate_content_hash, get_dashboard_stats
-from services.llm_service import analyze_article_with_llm
-from services.score_service import calculate_bios_fit_score
+from services.llm_service import analyze_article_with_llm, QuotaExhaustedError
+from services.score_service import calculate_bios_fit_score, compute_breakdown_from_article
 
 # Gemini free tier: 15 RPM → her çağrı arasında 2 saniye bekleme (demo için dengeli)
 LLM_RATE_LIMIT_DELAY = 2.0
@@ -55,7 +55,7 @@ def refresh_articles(
                     duplicates_skipped += 1
                     continue
                 
-                # 🤖 LLM Analysis - Analyze article with Gemini
+                # 🤖 LLM Analysis
                 try:
                     time.sleep(LLM_RATE_LIMIT_DELAY)
                     llm_result = analyze_article_with_llm(
@@ -82,6 +82,7 @@ def refresh_articles(
                         from_location=scored_result.get("from_location"),
                         to_location=scored_result.get("to_location"),
                         sector=scored_result.get("sector"),
+                        timeline=scored_result.get("timeline"),
                         score=scored_result.get("score", 0),
                         confidence=scored_result.get("confidence", 0.0),
                         action_label=scored_result.get("action_label", "Düşük Alaka"),
@@ -91,10 +92,16 @@ def refresh_articles(
                     db.add(new_article)
                     new_articles += 1
                     
+                except QuotaExhaustedError:
+                    # Kota bitti — o ana kadar kaydedilenleri kaydet ve dur
+                    db.commit()
+                    raise HTTPException(
+                        status_code=429,
+                        detail=f"API kota limiti bitti. {new_articles} haber kaydedildi, işlem durduruldu."
+                    )
                 except Exception as llm_error:
-                    # If LLM fails, save with default values
-                    print(f"[WARN] LLM analysis failed for article: {article_data['title'][:50]}... Error: {llm_error}")
-                    
+                    # Diğer LLM hatalarında fallback ile kaydet, devam et
+                    print(f"[WARN] LLM hatası: {article_data['title'][:50]}... Hata: {llm_error}")
                     new_article = Article(
                         source_id=article_data["source_id"],
                         source_name=article_data["source_name"],
@@ -103,21 +110,21 @@ def refresh_articles(
                         published_at=article_data["published_at"],
                         raw_summary=article_data["raw_summary"],
                         content_hash=content_hash,
-                        # Default AI fields
                         event_type="other",
-                        summary_tr=article_data["raw_summary"] or "AI analysis pending",
+                        summary_tr=article_data["raw_summary"] or "AI analiz bekliyor",
                         score=0,
                         confidence=0.0,
                         action_label="Düşük Alaka",
                         color_label="gray"
                     )
-                    
                     db.add(new_article)
                     new_articles += 1
-            
+
             # Update last_fetched_at for source
             source.last_fetched_at = datetime.utcnow()
-            
+
+        except HTTPException:
+            raise  # quota hatası yukarı geçsin
         except Exception as e:
             errors.append(f"{source.name}: {str(e)}")
             continue
@@ -187,6 +194,27 @@ def list_articles(
         offset=offset,
         items=articles
     )
+
+
+@router.delete("/articles", status_code=200)
+def delete_all_articles(db: Session = Depends(get_db)):
+    """
+    Tüm haberleri ve ilgili notları siler.
+    """
+    deleted = db.query(Article).delete()
+    db.commit()
+    return {"message": f"{deleted} haber silindi"}
+
+
+@router.get("/articles/{article_id}/breakdown", response_model=ScoreBreakdownResponse)
+def get_article_breakdown(article_id: int, db: Session = Depends(get_db)):
+    """
+    Bir haberin BIOS-Fit skor bileşenlerini döndürür.
+    """
+    article = db.query(Article).filter(Article.id == article_id).first()
+    if not article:
+        raise HTTPException(status_code=404, detail="Article not found")
+    return ScoreBreakdownResponse(**compute_breakdown_from_article(article))
 
 
 @router.get("/articles/{article_id}", response_model=ArticleResponse)

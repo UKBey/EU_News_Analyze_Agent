@@ -21,6 +21,7 @@ class ArticleResponse(BaseModel):
     confidence: float
     action_label: Optional[str]
     color_label: Optional[str]
+    timeline: Optional[str]
     created_at: datetime
 
     class Config:
@@ -48,3 +49,27 @@ class StatsResponse(BaseModel):
     high_score_count: int
     event_type_distribution: Dict[str, int]
     last_refresh_at: Optional[datetime]
+    today_count: int = 0
+    week_count: int = 0
+    top_company: Optional[str] = None
+    top_country: Optional[str] = None
+    top_source: Optional[str] = None
+    avg_score: Optional[float] = None
+
+
+class ScoreBreakdownResponse(BaseModel):
+    event_type_score: float
+    actor_clarity_score: float
+    geography_score: float
+    time_window_score: float
+    source_trust_score: float
+    contribution_E: int
+    contribution_A: int
+    contribution_G: int
+    contribution_T: int
+    contribution_C: int
+    max_E: int = 30
+    max_A: int = 25
+    max_G: int = 20
+    max_T: int = 15
+    max_C: int = 10

@@ -1,6 +1,7 @@
 import json
 import os
 import re
+from datetime import datetime
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -41,12 +42,30 @@ OLAY TİPLERİ:
 
 SEKTÖRLER: automotive, technology, manufacturing, energy, logistics, retail, finance, healthcare, construction, agriculture, aerospace, chemicals, food, textiles, electronics
 
+ZAMAN PENCERESİ (timeline) — olayın GERÇEKLEŞECEĞİ zamanı belirtir, haberin yayın tarihini değil:
+- "0-6m": Olay 0-6 ay içinde gerçekleşecek veya yakın zamanda duyuruldu.
+  Sinyaller: "announced", "will move", "will open", "will relocate", "in Q1/Q2/Q3/Q4",
+  "this year", "this quarter", "next month", "opening soon", "imminently",
+  "duyurdu", "açıkladı", "bu yıl", "bu çeyrekte", "yakında"
+- "6-18m": 6-18 ay arası planlanmış.
+  Sinyaller: "next year", "by [gelecek yıl]", "planned for [gelecek yıl]",
+  "gelecek yıl", "önümüzdeki yıl"
+- "18-36m": 18-36 ay arası uzun vadeli plan.
+  Sinyaller: "by 2028", "by 2029", "long-term plan", "in the coming years",
+  "uzun vadede", "orta vadeli"
+- null: Metinde zaman sinyali yok veya belirtilmemiş
+
 KURALLAR:
 - Bilgi metinde yoksa null kullan (asla tahmin etme)
 - summary_tr MUTLAKA Türkçe olmalı
 - Şirket adını tam yaz
 - Lokasyonları "Şehir, Ülke" formatında yaz
 - SADECE geçerli JSON döndür, başka hiçbir şey yazma"""
+
+
+class QuotaExhaustedError(Exception):
+    """Groq API kotası bittiğinde fırlatılır — fallback kullanılmaz, işlem durur."""
+    pass
 
 
 def analyze_article_with_llm(title: str, content: str) -> dict:
@@ -66,6 +85,7 @@ Yukarıdaki haberi analiz et ve SADECE aşağıdaki JSON formatında yanıt ver:
   "from_location": "Çıkış lokasyonu veya null",
   "to_location": "Hedef lokasyon veya null",
   "sector": "Sektör veya null",
+  "timeline": "0-6m/6-18m/18-36m veya null",
   "score": 0,
   "confidence": 0.0
 }}"""
@@ -86,9 +106,47 @@ Yukarıdaki haberi analiz et ve SADECE aşağıdaki JSON formatında yanıt ver:
         return result
 
     except Exception as e:
-        print(f"[ERROR] Groq API hatası ({type(e).__name__}): {e}")
+        error_type = type(e).__name__
+        error_str = str(e)
+        if "RateLimitError" in error_type or "rate_limit" in error_str.lower() or "429" in error_str:
+            print(f"[HATA] Groq API kota limiti bitti: {e}")
+            raise QuotaExhaustedError(f"Groq API kota limiti bitti: {error_str[:200]}")
+        print(f"[ERROR] Groq API hatası ({error_type}): {e}")
         print(f"[ERROR] Fallback kullanılıyor → başlık: {title[:80]}")
         return get_fallback_analysis(title, content)
+
+
+def _detect_timeline(title: str, content: str) -> str | None:
+    """Haber metnindeki zaman sinyallerinden timeline kategorisi çıkarır."""
+    combined = (title + " " + content).lower()
+    current_year = datetime.now().year
+
+    immediate = [
+        "announced", "will move", "will open", "will relocate", "will close",
+        "in q1", "in q2", "in q3", "in q4",
+        "this year", "this quarter", "next month", "opening soon",
+        "soon", "upcoming", "imminently", "shortly",
+        "duyurdu", "açıkladı", "bu yıl", "yakında", "bu çeyrekte",
+        str(current_year),
+    ]
+    short_term = [
+        "next year", "by next year",
+        "gelecek yıl", "önümüzdeki yıl",
+        str(current_year + 1),
+    ]
+    medium_term = [
+        "in the coming years", "long-term", "long term",
+        "uzun vadede", "orta vadeli",
+        str(current_year + 2), str(current_year + 3),
+    ]
+
+    if any(s in combined for s in immediate):
+        return "0-6m"
+    if any(s in combined for s in short_term):
+        return "6-18m"
+    if any(s in combined for s in medium_term):
+        return "18-36m"
+    return None
 
 
 def get_fallback_analysis(title: str, content: str = "") -> dict:
@@ -169,6 +227,8 @@ def get_fallback_analysis(title: str, content: str = "") -> dict:
                 to_location = country
             break
 
+    timeline = _detect_timeline(title, content)
+
     return {
         "event_type": event_type,
         "summary_tr": f"Otomatik analiz: {title[:200]}",
@@ -176,6 +236,7 @@ def get_fallback_analysis(title: str, content: str = "") -> dict:
         "from_location": from_location,
         "to_location": to_location,
         "sector": sector,
+        "timeline": timeline,
         "score": 0,
         "confidence": 0.0,
     }

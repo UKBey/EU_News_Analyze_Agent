@@ -1,7 +1,8 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from sqlalchemy import text, inspect
 from database import engine, Base, SessionLocal
-from routers import rss_router, article_router
+from routers import rss_router, article_router, note_router
 import os
 from dotenv import load_dotenv
 
@@ -10,6 +11,18 @@ load_dotenv()
 
 # Create database tables
 Base.metadata.create_all(bind=engine)
+
+# Migrate existing DB: add columns that may be missing
+def _run_migrations():
+    inspector = inspect(engine)
+    existing = {c["name"] for c in inspector.get_columns("articles")}
+    with engine.connect() as conn:
+        if "timeline" not in existing:
+            conn.execute(text("ALTER TABLE articles ADD COLUMN timeline TEXT"))
+            conn.commit()
+            print("[OK] Migration: 'timeline' sütunu articles tablosuna eklendi")
+
+_run_migrations()
 
 # Initialize FastAPI app
 app = FastAPI(
@@ -34,6 +47,7 @@ app.add_middleware(
 # Include routers
 app.include_router(rss_router)
 app.include_router(article_router)
+app.include_router(note_router)
 
 
 @app.get("/api/health")
