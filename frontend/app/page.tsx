@@ -28,7 +28,6 @@ import {
   Moon,
   Sun,
   Star,
-  Clock,
   Timer
 } from "lucide-react"
 import { api, convertBackendArticle, type BackendRSSSource } from "@/lib/api"
@@ -353,58 +352,8 @@ function NewsCard({ news, onClick }: { news: NewsItem; onClick: () => void }) {
   )
 }
 
-// Company Timeline Component
-function CompanyTimeline({ news }: { news: NewsItem[] }) {
-  // Group news by company
-  const companiesMap = new Map<string, NewsItem[]>()
-  news.forEach(item => {
-    const existing = companiesMap.get(item.company) || []
-    companiesMap.set(item.company, [...existing, item])
-  })
-
-  const companies = Array.from(companiesMap.entries())
-    .filter(([, items]) => items.length > 0)
-    .sort((a, b) => b[1].length - a[1].length)
-    .slice(0, 5)
-
-  if (companies.length === 0) return null
-
-  return (
-    <Card className="p-5 bg-card">
-      <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-4 flex items-center gap-2">
-        <Clock className="w-4 h-4" />
-        Sirket Zaman Cizelgesi
-      </h3>
-      <div className="space-y-4">
-        {companies.map(([company, items]) => (
-          <div key={company} className="border-l-2 border-primary/30 pl-4">
-            <h4 className="font-semibold text-foreground mb-2 flex items-center gap-2">
-              <Building2 className="w-4 h-4 text-primary" />
-              {company}
-              <Badge variant="secondary" className="text-xs">{items.length} haber</Badge>
-            </h4>
-            <div className="space-y-2">
-              {items.slice(0, 3).map(item => {
-                const eventType = getEventTypeConfig(item.event_type)
-                return (
-                  <div key={item.id} className="flex items-start gap-2 text-sm">
-                    <div className={`w-2 h-2 rounded-full mt-1.5 ${eventType.color}`} />
-                    <div className="flex-1 min-w-0">
-                      <p className="text-muted-foreground truncate">{item.title}</p>
-                      <p className="text-xs text-muted-foreground/70">{formatDate(item.date)}</p>
-                    </div>
-                  </div>
-                )
-              })}
-            </div>
-          </div>
-        ))}
-      </div>
-    </Card>
-  )
-}
-
-function LoadingSkeleton() {
+// Theme Toggle Component
+function ThemeToggle() {
   return (
     <div className="space-y-6">
       {[1, 2, 3].map((i) => (
@@ -494,6 +443,8 @@ export default function Dashboard() {
   const [searchTerm, setSearchTerm] = useState("")
   const [scoreFilter, setScoreFilter] = useState<string>("all")
   const [eventFilter, setEventFilter] = useState<string>("all")
+  const [companyFilter, setCompanyFilter] = useState<string>("all")
+  const [sortOrder, setSortOrder] = useState<"newest" | "oldest">("newest")
   const [isLoading, setIsLoading] = useState(false)
   const [autoRefresh, setAutoRefresh] = useState(false)
   const [lastRefresh, setLastRefresh] = useState<Date | null>(null)
@@ -612,6 +563,9 @@ export default function Dashboard() {
     router.push(`/news/${id}`)
   }
 
+  // Get unique companies for filter dropdown
+  const uniqueCompanies = Array.from(new Set(news.map(item => item.company))).sort()
+
   const filteredNews = news.filter((item) => {
     const matchesSearch =
       !searchTerm ||
@@ -628,13 +582,21 @@ export default function Dashboard() {
     else if (scoreFilter === "low") matchesScore = item.score < 50
 
     const matchesEvent = eventFilter === "all" || item.event_type === eventFilter
+    const matchesCompany = companyFilter === "all" || item.company === companyFilter
 
-    return matchesSearch && matchesScore && matchesEvent
+    return matchesSearch && matchesScore && matchesEvent && matchesCompany
+  })
+
+  // Sort by date
+  const sortedNews = [...filteredNews].sort((a, b) => {
+    const dateA = new Date(a.date).getTime()
+    const dateB = new Date(b.date).getTime()
+    return sortOrder === "newest" ? dateB - dateA : dateA - dateB
   })
 
   // Separate featured news (score >= 90) from regular news
-  const featuredNews = filteredNews.filter(item => item.score >= 90)
-  const regularNews = filteredNews.filter(item => item.score < 90)
+  const featuredNews = sortedNews.filter(item => item.score >= 90)
+  const regularNews = sortedNews.filter(item => item.score < 90)
 
   return (
     <div className="flex min-h-screen bg-background">
@@ -648,9 +610,56 @@ export default function Dashboard() {
           <p className="text-xs text-muted-foreground mt-1">Avrupa Haber Tarama Sistemi</p>
         </div>
 
-        {/* Company Timeline - En Uste */}
-        <div className="p-4 border-b border-sidebar-border">
-          <CompanyTimeline news={news} />
+        {/* Filters - Company & Sort */}
+        <div className="p-4 border-b border-sidebar-border space-y-3">
+          <div>
+            <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 block">
+              Şirket Filtresi
+            </label>
+            <Select value={companyFilter} onValueChange={setCompanyFilter}>
+              <SelectTrigger className="w-full bg-secondary border-border">
+                <SelectValue placeholder="Tüm Şirketler" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Tüm Şirketler</SelectItem>
+                {uniqueCompanies.map((company) => (
+                  <SelectItem key={company} value={company}>
+                    {company}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div>
+            <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 block">
+              Sıralama
+            </label>
+            <Select value={sortOrder} onValueChange={(value: "newest" | "oldest") => setSortOrder(value)}>
+              <SelectTrigger className="w-full bg-secondary border-border">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="newest">En Yeni → En Eski</SelectItem>
+                <SelectItem value="oldest">En Eski → En Yeni</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          {(companyFilter !== "all" || sortOrder !== "newest") && (
+            <Button 
+              variant="outline" 
+              size="sm" 
+              className="w-full"
+              onClick={() => {
+                setCompanyFilter("all")
+                setSortOrder("newest")
+              }}
+            >
+              <RefreshCw className="w-3 h-3 mr-2" />
+              Filtreleri Sıfırla
+            </Button>
+          )}
         </div>
 
         {/* RSS Management */}
@@ -798,13 +807,15 @@ export default function Dashboard() {
           <div className="max-w-4xl mx-auto space-y-6">
             {isLoading ? (
               <LoadingSkeleton />
-            ) : filteredNews.length === 0 ? (
+            ) : sortedNews.length === 0 ? (
               <EmptyState 
-                hasFilters={searchTerm !== "" || scoreFilter !== "all" || eventFilter !== "all"} 
+                hasFilters={searchTerm !== "" || scoreFilter !== "all" || eventFilter !== "all" || companyFilter !== "all"} 
                 onClearFilters={() => {
                   setSearchTerm("")
                   setScoreFilter("all")
                   setEventFilter("all")
+                  setCompanyFilter("all")
+                  setSortOrder("newest")
                 }}
               />
             ) : (
