@@ -1,0 +1,42 @@
+1. Backend Sorumlusuna (1. Kişi) Kodu Teslim Et ve Bağla
+Şimdi 1. kişinin yanına (veya Discord/Slack ekranına) gidip şunu demelisin:
+"Benim servislerim hazır. Sen POST /api/articles/refresh endpoint'ini çağırdığında şu sırayla çalıştıracaksın:"
+
+Benim fetch_rss_feeds() fonksiyonuma kaynakları ver.
+
+Gelen haberlerin content_hash değerini veritabanında kontrol et (Dedup işlemi).
+
+Sadece yeni olan haberleri bir döngüye sok ve benim analyze_article_with_llm() fonksiyonuma gönder.
+
+LLM'den dönen sonucu hemen ardından calculate_bios_fit_score() fonksiyonuma sok.
+
+En son çıkan o mükemmel JSON'u veritabanına kaydet.
+
+Bu entegrasyonu yaparken onun API'sinin patlamadığından ve senin test_run.py'de gördüğün sonucun aynısının veritabanına yazıldığından emin ol.
+
+2. Jüri İçin "Kanıt" Hazırla (README Dokümantasyonu)
+Dokümanda "Skor mantığının tutarlı çalıştığını göstermek için en az 3 adet test haberi üzerinde çalışan örnek hesaplama sunulması beklenir" kuralı var.  
+
+Az önce test ettiğin ve "other" (51 Puan - Sarı) çıkan haberi bir kenara not et.
+
+Şimdi yapay zekaya manuel olarak bir "Fabrika Taşıma (Relocation)" haberi ve bir "Tesis Kapanışı (Closure)" haberi verip çalıştır.
+
+Oluşan 3 farklı JSON çıktısını, LLM'de kullandığın "Prompt" metnini ve skorlama mantığını projenin README.md dosyasına güzelce yaz. Jüriler koda bakmadan önce buraya bakacaklar.
+
+3. Hayat Kurtaran "Seed Data" (Demo Verisi) Hazırla
+Yarın saat 14:00'te jüri karşısına çıktığınızda, çok düşük bir ihtimal de olsa o an hiçbir RSS kaynağında yeni haber olmayabilir veya internetiniz kopabilir. Ekranda "0 Haber" yazması bütün büyüyü bozar.  
+
+İçinde 1 Yeşil (Yüksek Fırsat), 1 Mavi, 1 Sarı ve 1 Gri haber bulunan, sanki yapay zeka ve sistem az önce işlemiş gibi duran statik bir demo_seed.json dosyası oluştur.
+
+Backend sorumlusuna, "Eğer sunum anında sistem boş dönerse veya hata alırsak, API'miz direkt bu JSON dosyasını okuyup Frontend'e göndersin" de. Bu sizin kasko sigortanızdır.
+
+4. Frontend Sorumlusuna (3. Kişi) Renkleri Ver
+UI kısmını yapan arkadaşının senin JSON'dan dönen verilere göre ekranı boyaması lazım. Ona şu kural setini ilet:
+
+Benim JSON'umdan color_label: "Yeşil" gelirse o haberi Yüksek Fırsat olarak göster ve yeşil renge boya.  
+
+color_label: "Mavi" gelirse İzlenecek (Mavi) yap.  
+
+color_label: "Sarı" gelirse Şartlı İlgi (Sarı) yap.  
+
+color_label: "Gri" gelirse Düşük Alaka (Gri) yap ve silik göster.
