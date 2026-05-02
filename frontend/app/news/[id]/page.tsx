@@ -25,6 +25,7 @@ import {
 } from "lucide-react"
 import { api, convertBackendArticle } from "@/lib/api"
 import { toast } from "sonner"
+import { stripHtmlTags } from "@/lib/utils"
 import type { NewsItem } from "@/app/page"
 
 // Helper functions
@@ -205,16 +206,21 @@ export default function NewsDetailPage() {
             {/* Summary */}
             <Card className="p-5 mb-6 bg-primary/5 border-primary/20">
               <h3 className="text-sm font-semibold text-primary uppercase tracking-wider mb-2">Ozet</h3>
-              <p className="text-foreground leading-relaxed">{news.summary_tr}</p>
+              <p className="text-foreground leading-relaxed">{stripHtmlTags(news.summary_tr)}</p>
             </Card>
 
             {/* Full Content */}
             <div className="prose prose-slate max-w-none">
-              {news.full_content.split("\n\n").map((paragraph, index) => (
-                <p key={index} className="text-foreground leading-relaxed mb-4 text-base">
-                  {paragraph}
-                </p>
-              ))}
+              {stripHtmlTags(news.full_content).split("\n\n").map((paragraph, index) => {
+                // Skip empty paragraphs
+                if (!paragraph.trim()) return null
+                
+                return (
+                  <p key={index} className="text-foreground leading-relaxed mb-4 text-base">
+                    {paragraph}
+                  </p>
+                )
+              })}
             </div>
 
             {/* Source Link */}

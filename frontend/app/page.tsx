@@ -33,6 +33,7 @@ import {
 } from "lucide-react"
 import { api, convertBackendArticle, type BackendRSSSource } from "@/lib/api"
 import { toast } from "sonner"
+import { stripHtmlTags } from "@/lib/utils"
 
 // Types
 export interface NewsItem {
@@ -223,7 +224,7 @@ function FeaturedNewsCard({ news, onClick }: { news: NewsItem; onClick: () => vo
           </h3>
 
           {/* Summary */}
-          <p className="text-muted-foreground mb-4 leading-relaxed">{news.summary_tr}</p>
+          <p className="text-muted-foreground mb-4 leading-relaxed">{stripHtmlTags(news.summary_tr)}</p>
 
           {/* Location */}
           {(news.from_location || news.to_location) && (
@@ -307,7 +308,7 @@ function NewsCard({ news, onClick }: { news: NewsItem; onClick: () => void }) {
         </h3>
 
         {/* Summary */}
-        <p className="text-muted-foreground text-sm mb-4 leading-relaxed line-clamp-2">{news.summary_tr}</p>
+        <p className="text-muted-foreground text-sm mb-4 leading-relaxed line-clamp-2">{stripHtmlTags(news.summary_tr)}</p>
 
         {/* Location */}
         <div className="mb-4">
