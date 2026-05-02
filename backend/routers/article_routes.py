@@ -3,12 +3,16 @@ from sqlalchemy.orm import Session
 from sqlalchemy import or_, func
 from typing import Optional
 from datetime import datetime
+import time
 from database import get_db
 from models import RSSSource, Article
 from schemas import ArticleResponse, ArticleListResponse, RefreshResponse, StatsResponse
 from services import fetch_articles_from_source, generate_content_hash, get_dashboard_stats
 from services.llm_service import analyze_article_with_llm
 from services.score_service import calculate_bios_fit_score
+
+# Gemini free tier: 15 RPM → her çağrı arasında 2 saniye bekleme (demo için dengeli)
+LLM_RATE_LIMIT_DELAY = 2.0
 
 router = APIRouter(prefix="/api", tags=["Articles"])
 
@@ -50,6 +54,7 @@ def refresh_articles(db: Session = Depends(get_db)):
                 
                 # 🤖 LLM Analysis - Analyze article with Gemini
                 try:
+                    time.sleep(LLM_RATE_LIMIT_DELAY)
                     llm_result = analyze_article_with_llm(
                         article_data["title"],
                         article_data["raw_summary"] or ""
@@ -85,7 +90,7 @@ def refresh_articles(db: Session = Depends(get_db)):
                     
                 except Exception as llm_error:
                     # If LLM fails, save with default values
-                    print(f"⚠️ LLM analysis failed for article: {article_data['title'][:50]}... Error: {llm_error}")
+                    print(f"[WARN] LLM analysis failed for article: {article_data['title'][:50]}... Error: {llm_error}")
                     
                     new_article = Article(
                         source_id=article_data["source_id"],

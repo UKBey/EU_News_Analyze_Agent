@@ -1,4 +1,4 @@
-# 🌱 Quick Seed Guide - RSS Sources & Demo Data
+# 🌱 Quick Seed Guide - RSS Sources
 
 ## 🚀 Option 1: Automatic Seeding (Recommended)
 
@@ -98,24 +98,6 @@ After refresh, you should see:
 
 ---
 
-## 🎭 Demo Data (For Presentations)
-
-If you need guaranteed demo data for hackathon presentation:
-
-```bash
-cd backend
-python seed/load_demo_articles.py
-```
-
-This loads 6 pre-scored articles covering all score ranges.
-
-**When to use:**
-- During hackathon presentation
-- When RSS sources have no new articles
-- For testing frontend without waiting for LLM
-
----
-
 ## 🔄 Re-seeding
 
 To add sources again (if you deleted them):
@@ -143,7 +125,7 @@ Some RSS feeds may be temporarily unavailable. The script will skip them and con
 ### "No articles after refresh"
 - Check if RSS sources are active
 - Try refreshing again (some feeds update slowly)
-- Load demo data for testing
+- Verify the RSS feed URLs in `seed_rss_sources.py`
 
 ### "LLM analysis failed"
 - Check GEMINI_API_KEY in .env file
@@ -159,10 +141,10 @@ Some RSS feeds may be temporarily unavailable. The script will skip them and con
 2. Open frontend → Click refresh
 3. Wait 2-5 minutes → Articles appear with scores!
 
-**For demo:**
-1. Load demo data: `python seed/load_demo_articles.py`
-2. Start backend
-3. Open frontend → Articles already there!
+**To reset data:**
+1. Run `python reset_database.py`
+2. Restart backend
+3. Open frontend → click refresh to fetch fresh RSS data
 
 ---
 

@@ -3,7 +3,7 @@ import feedparser
 # 1. HAMLE: Sitelerin bizi bot sanmasını engellemek için sahte bir tarayıcı kimliği atıyoruz
 feedparser.USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
 
-DEMO_SOURCES = [
+RSS_SOURCES = [
     {"id": 1, "name": "EU Startups", "url": "https://www.eu-startups.com/feed/"},
     {"id": 2, "name": "EU Business News", "url": "https://eubusinessnews.com/feed"},
     {"id": 3, "name": "ECSB Research Blog", "url": "https://ecsbresearchblog.wordpress.com/feed/"},
@@ -54,5 +54,5 @@ def fetch_rss_feeds(sources):
 
 # Çıktıyı görelim
 if __name__ == "__main__":
-    haberler = fetch_rss_feeds(DEMO_SOURCES)
+    haberler = fetch_rss_feeds(RSS_SOURCES)
     print(f"\nToplam çekilen haber sayısı: {len(haberler)}")

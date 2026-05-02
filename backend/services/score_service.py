@@ -68,10 +68,10 @@ def calculate_bios_fit_score(llm_data: dict, source_url: str) -> dict:
     # Formül: Score = 100 x (0.30E + 0.25A + 0.20G + 0.15T + 0.10C)
     raw_score = 100 * (0.30 * e_val + 0.25 * a_val + 0.20 * g_val + 0.15 * t_val + 0.10 * c_val)
 
-    # Güven Puanı (Confidence)
+    # Güven Puanı (Confidence) — event_type her zaman dolu sayılır ("other" dahil)
     filled_fields = 0
     for field in ["company", "from_location", "to_location", "sector", "event_type"]:
-        if llm_data.get(field) and llm_data.get(field) != "other":
+        if llm_data.get(field):
             filled_fields += 1
     
     confidence = filled_fields / 5.0
@@ -80,7 +80,7 @@ def calculate_bios_fit_score(llm_data: dict, source_url: str) -> dict:
     if confidence < 0.40:
         raw_score = raw_score * 0.5
 
-    llm_data["score"] = math.floor(raw_score)
+    llm_data["score"] = round(raw_score)
     llm_data["confidence"] = round(confidence, 2)
 
     # Renk Etiketi Ekleme (Frontend için kolaylık)

@@ -1,5 +1,6 @@
 import json
 import os
+import re
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -10,25 +11,25 @@ try:
     from google.genai import types
     GEMINI_AVAILABLE = True
 except ImportError:
-    print("⚠️ WARNING: google-genai not installed. Install with: pip install google-genai")
+    print("[WARN] google-genai not installed. Install with: pip install google-genai")
     GEMINI_AVAILABLE = False
     genai = None
     types = None
 
 # API Key from environment variable
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "AIzaSyCL-kacoQLBeU79eYlg8jkfMNY-ejR1-Bs")
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 
 # Initialize client if available
 client = None
 if GEMINI_AVAILABLE:
     try:
         client = genai.Client(api_key=GEMINI_API_KEY)
-        print("✅ Gemini LLM client initialized successfully")
+        print("[OK] Gemini LLM client initialized successfully")
     except Exception as e:
-        print(f"⚠️ WARNING: Gemini client initialization failed: {e}")
+        print(f"[WARN] Gemini client initialization failed: {e}")
         client = None
 else:
-    print("⚠️ Running without LLM - using fallback analysis only")
+    print("[WARN] Running without LLM - using fallback analysis only")
 
 
 def analyze_article_with_llm(title: str, content: str) -> dict:
@@ -36,7 +37,7 @@ def analyze_article_with_llm(title: str, content: str) -> dict:
     Haberi Gemini'a gönderip, dokümanda istenen yapılandırılmış JSON formatını çeker.
     """
     if not client:
-        print("⚠️ WARNING: Gemini client not available, using fallback")
+        print("[WARN] Gemini client not available, using fallback")
         return get_fallback_analysis(title, content)
     
     system_instruction = """
@@ -85,7 +86,7 @@ def analyze_article_with_llm(title: str, content: str) -> dict:
     try:
         # Yeni genai SDK sözdizimi
         response = client.models.generate_content(
-            model='gemini-1.5-flash',  # Stable model
+            model='gemini-2.0-flash-lite',
             contents=prompt,
             config=types.GenerateContentConfig(
                 system_instruction=system_instruction,
@@ -99,8 +100,8 @@ def analyze_article_with_llm(title: str, content: str) -> dict:
         return result
 
     except Exception as e:
-        print(f"❌ HATA: LLM API çağrısında bir sorun oluştu: {e}")
-        # Hata durumunda fallback fonksiyonunu çağır
+        print(f"[ERROR] LLM API error ({type(e).__name__}): {e}")
+        print(f"[ERROR] Fallback kullanılıyor → başlık: {title[:80]}")
         return get_fallback_analysis(title, content)
 
 
@@ -153,7 +154,10 @@ def get_fallback_analysis(title: str, content: str = "") -> dict:
         # Look for capitalized words that might be company names
         if word and len(word) > 2 and word[0].isupper():
             # Skip common words
-            if word.lower() not in ["the", "a", "an", "in", "on", "at", "to", "for", "of", "and", "or", "but"]:
+            if word.lower() not in ["the", "a", "an", "in", "on", "at", "to", "for", "of", "and", "or", "but",
+                                     "how", "why", "what", "when", "where", "which", "who", "is", "are", "was",
+                                     "your", "my", "our", "their", "this", "that", "these", "those", "from",
+                                     "with", "will", "can", "may", "its", "by", "new", "all"]:
                 company = word
                 # Check if next word is also capitalized (multi-word company name)
                 if i + 1 < len(words) and words[i + 1][0].isupper():
@@ -179,7 +183,8 @@ def get_fallback_analysis(title: str, content: str = "") -> dict:
     }
     
     for country, keywords in location_keywords.items():
-        if any(keyword in combined for keyword in keywords):
+        # Word-boundary check — "phuket" içindeki "uk" gibi yanlış eşleşmeleri önler
+        if any(re.search(r'\b' + re.escape(keyword) + r'\b', combined) for keyword in keywords):
             if event_type in ["relocation", "closure"]:
                 from_location = country
             else:

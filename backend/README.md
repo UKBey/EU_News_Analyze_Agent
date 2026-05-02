@@ -78,7 +78,7 @@ backend/
 │
 └── seed/                  # Database seeding
     ├── __init__.py
-    └── demo_sources.py    # Demo RSS sources
+  └── seed_rss_sources.py # RSS source seeding
 ```
 
 ## 🗄️ Database Schema
@@ -224,7 +224,7 @@ GET /api/stats
 ### 1. Initial Setup
 1. Start the backend server
 2. Database tables are created automatically
-3. (Optional) Seed demo RSS sources
+3. RSS sources are loaded automatically on startup
 
 ### 2. Add RSS Sources
 Frontend calls `POST /api/rss-sources` to add news sources.
@@ -291,29 +291,16 @@ db.commit()
 - 31-69: Medium relevance (yellow)
 - 70-100: High relevance (green)
 
-## 🌱 Seeding Demo Data
+## 🧹 Resetting the Database
 
-To seed demo RSS sources, uncomment lines in `main.py`:
+To wipe all current data and recreate the tables, run:
 
-```python
-@app.on_event("startup")
-def startup_event():
-    db = SessionLocal()
-    try:
-        seed_demo_sources(db)
-    finally:
-        db.close()
+```bash
+cd backend
+python reset_database.py
 ```
 
-Or run manually:
-```python
-from database import SessionLocal
-from seed import seed_demo_sources
-
-db = SessionLocal()
-seed_demo_sources(db)
-db.close()
-```
+This clears both `rss_sources` and `articles`, then recreates the schema with the same models.
 
 ## 🔧 Configuration
 

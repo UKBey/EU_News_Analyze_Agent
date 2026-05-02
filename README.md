@@ -149,7 +149,7 @@ EU_News_Analyze_Agent/
 │   │   ├── llm_service.py    # Gemini LLM integration
 │   │   ├── score_service.py  # BIOS-Fit scoring
 │   │   └── rss_service.py    # RSS fetching
-│   ├── seed/                  # Demo data and RSS sources
+│   ├── seed/                  # RSS source seeding
 │   └── requirements.txt       # Python dependencies
 │
 ├── frontend/                   # Next.js frontend
@@ -199,29 +199,10 @@ cd backend
 python test_api.py
 ```
 
-### Load Demo Data
-```bash
-cd backend
-python seed/load_demo_articles.py
-```
-
 ### Manual Testing
 1. Open Swagger UI: http://localhost:8000/docs
 2. Try each endpoint interactively
 3. Check responses and schemas
-
----
-
-## 🎭 Demo Mode
-
-For hackathon presentations, load pre-scored demo articles:
-
-```bash
-cd backend
-python seed/load_demo_articles.py
-```
-
-This loads 6 articles covering all score ranges (green, blue, yellow, gray).
 
 ---
 
@@ -310,7 +291,7 @@ NEXT_PUBLIC_API_URL=http://localhost:8000/api
 ### No articles after refresh
 - Check RSS sources are active
 - Try refreshing again
-- Load demo data for testing
+- Run `python backend/reset_database.py` if you want a clean slate
 
 ---
 

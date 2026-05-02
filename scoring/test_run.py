@@ -1,10 +1,10 @@
-from rss_service import fetch_rss_feeds, DEMO_SOURCES
+from rss_service import fetch_rss_feeds, RSS_SOURCES
 from llm_service import analyze_article_with_llm
 from score_service import calculate_bios_fit_score # Skor servisimizi ekledik
 import json
 
 print("1. RSS verileri çekiliyor...")
-haberler = fetch_rss_feeds([DEMO_SOURCES[2]]) # ECSB kaynağını çekiyor
+haberler = fetch_rss_feeds([RSS_SOURCES[2]]) # ECSB kaynağını çekiyor
 
 if haberler:
     ilk_haber = haberler[0]

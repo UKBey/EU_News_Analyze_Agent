@@ -82,7 +82,7 @@ def seed_rss_sources(db: Session, force: bool = False):
     existing_count = db.query(RSSSource).count()
     
     if existing_count > 0 and not force:
-        print(f"ℹ️  Database already has {existing_count} RSS sources.")
+        print(f"[INFO] Database already has {existing_count} RSS sources.")
         print("   Run with force=True to add more sources anyway.")
         return
     
@@ -94,7 +94,7 @@ def seed_rss_sources(db: Session, force: bool = False):
         existing = db.query(RSSSource).filter(RSSSource.url == source_data["url"]).first()
         
         if existing:
-            print(f"⏭️  Skipped: {source_data['name']} (already exists)")
+            print(f"[SKIP] Skipped: {source_data['name']} (already exists)")
             skipped_count += 1
             continue
         
@@ -108,24 +108,24 @@ def seed_rss_sources(db: Session, force: bool = False):
         
         db.add(source)
         added_count += 1
-        print(f"✅ Added: {source_data['name']}")
+        print(f"[OK] Added: {source_data['name']}")
     
     db.commit()
     
-    print(f"\n📊 Summary:")
+    print(f"\n[SUMMARY]")
     print(f"   Added: {added_count}")
     print(f"   Skipped: {skipped_count}")
     print(f"   Total in DB: {db.query(RSSSource).count()}")
     
     if added_count > 0:
-        print(f"\n🎉 Successfully seeded {added_count} RSS sources!")
+        print(f"\n[OK] Successfully seeded {added_count} RSS sources!")
         print(f"   Now you can refresh articles from the frontend or API.")
 
 
 if __name__ == "__main__":
     from database import SessionLocal
     
-    print("🌱 Seeding RSS sources from scoring/rss_links.txt...")
+    print("[SEED] Seeding RSS sources from scoring/rss_links.txt...")
     print("=" * 60)
     
     db = SessionLocal()
@@ -135,4 +135,4 @@ if __name__ == "__main__":
         db.close()
     
     print("=" * 60)
-    print("✅ Done!")
+    print("[OK] Done!")

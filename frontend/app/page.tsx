@@ -28,7 +28,9 @@ import {
   Moon,
   Sun,
   Star,
-  Timer
+  Timer,
+  FileText,
+  CircleDot
 } from "lucide-react"
 import { api, convertBackendArticle, type BackendRSSSource } from "@/lib/api"
 import { toast } from "sonner"
@@ -40,7 +42,7 @@ export interface NewsItem {
   title: string
   source: string
   date: string
-  event_type: "relocation" | "new_plant" | "expansion" | "closure"
+  event_type: "relocation" | "new_plant" | "expansion" | "closure" | "tender" | "other"
   summary_tr: string
   company: string
   from_location: string | null
@@ -49,6 +51,10 @@ export interface NewsItem {
   score: number
   image: string
   full_content: string
+  link?: string
+  confidence?: number
+  action_label?: string | null
+  color_label?: string | null
 }
 
 interface RssSource {
@@ -56,6 +62,8 @@ interface RssSource {
   name: string
   url: string
   category?: string | null
+  is_active: boolean
+  last_fetched_at: string | null
 }
 
 // Mock data
@@ -167,9 +175,11 @@ function getEventTypeConfig(eventType: NewsItem["event_type"]) {
     relocation: { text: "Taşınma", icon: Package, color: "bg-violet-600" },
     new_plant: { text: "Yeni Tesis", icon: Factory, color: "bg-emerald-600" },
     expansion: { text: "Genişleme", icon: TrendingUp, color: "bg-blue-600" },
-    closure: { text: "Kapanış", icon: Lock, color: "bg-red-600" }
+    closure: { text: "Kapanış", icon: Lock, color: "bg-red-600" },
+    tender: { text: "İhale", icon: FileText, color: "bg-orange-600" },
+    other: { text: "Diğer", icon: CircleDot, color: "bg-slate-600" }
   }
-  return config[eventType] || { text: eventType, icon: Package, color: "bg-slate-600" }
+  return config[eventType] || { text: eventType, icon: CircleDot, color: "bg-slate-600" }
 }
 
 function formatDate(dateStr: string) {
@@ -444,6 +454,7 @@ export default function Dashboard() {
   const [scoreFilter, setScoreFilter] = useState<string>("all")
   const [eventFilter, setEventFilter] = useState<string>("all")
   const [companyFilter, setCompanyFilter] = useState<string>("all")
+  const [sourceFilter, setSourceFilter] = useState<string>("all")
   const [sortOrder, setSortOrder] = useState<"newest" | "oldest">("newest")
   const [isLoading, setIsLoading] = useState(false)
   const [autoRefresh, setAutoRefresh] = useState(false)
@@ -583,8 +594,9 @@ export default function Dashboard() {
 
     const matchesEvent = eventFilter === "all" || item.event_type === eventFilter
     const matchesCompany = companyFilter === "all" || item.company === companyFilter
+    const matchesSource = sourceFilter === "all" || item.source === sourceFilter
 
-    return matchesSearch && matchesScore && matchesEvent && matchesCompany
+    return matchesSearch && matchesScore && matchesEvent && matchesCompany && matchesSource
   })
 
   // Sort by date
@@ -702,8 +714,19 @@ export default function Dashboard() {
                     className="flex items-center justify-between bg-secondary rounded-lg px-3 py-2 group"
                   >
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-sidebar-foreground truncate">{source.name}</p>
+                      <div className="flex items-center gap-1.5">
+                        <p className="text-sm font-medium text-sidebar-foreground truncate">{source.name}</p>
+                        <div
+                          className={`w-2 h-2 rounded-full shrink-0 ${source.is_active ? "bg-emerald-500" : "bg-red-400"}`}
+                          title={source.is_active ? "Aktif" : "Pasif"}
+                        />
+                      </div>
                       <p className="text-xs text-muted-foreground truncate">{source.url}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {source.last_fetched_at
+                          ? `Son çekim: ${new Date(source.last_fetched_at).toLocaleTimeString("tr-TR", { hour: "2-digit", minute: "2-digit" })}`
+                          : "Henüz çekilmedi"}
+                      </p>
                     </div>
                     <Button
                       variant="ghost"
@@ -769,6 +792,20 @@ export default function Dashboard() {
                   <SelectItem value="new_plant">Yeni Tesis</SelectItem>
                   <SelectItem value="expansion">Genisleme</SelectItem>
                   <SelectItem value="closure">Kapanis</SelectItem>
+                  <SelectItem value="tender">Ihale</SelectItem>
+                  <SelectItem value="other">Diger</SelectItem>
+                </SelectContent>
+              </Select>
+
+              <Select value={sourceFilter} onValueChange={setSourceFilter}>
+                <SelectTrigger className="w-40 bg-secondary border-border">
+                  <SelectValue placeholder="Tüm Kaynaklar" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Tüm Kaynaklar</SelectItem>
+                  {rssSources.map((s) => (
+                    <SelectItem key={s.id} value={s.name}>{s.name}</SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
 
@@ -808,13 +845,14 @@ export default function Dashboard() {
             {isLoading ? (
               <LoadingSkeleton />
             ) : sortedNews.length === 0 ? (
-              <EmptyState 
-                hasFilters={searchTerm !== "" || scoreFilter !== "all" || eventFilter !== "all" || companyFilter !== "all"} 
+              <EmptyState
+                hasFilters={searchTerm !== "" || scoreFilter !== "all" || eventFilter !== "all" || companyFilter !== "all" || sourceFilter !== "all"}
                 onClearFilters={() => {
                   setSearchTerm("")
                   setScoreFilter("all")
                   setEventFilter("all")
                   setCompanyFilter("all")
+                  setSourceFilter("all")
                   setSortOrder("newest")
                 }}
               />

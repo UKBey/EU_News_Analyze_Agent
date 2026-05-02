@@ -2,7 +2,6 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from database import engine, Base, SessionLocal
 from routers import rss_router, article_router
-from seed import seed_demo_sources
 import os
 from dotenv import load_dotenv
 
@@ -52,10 +51,10 @@ def health_check():
 def startup_event():
     """
     Run on application startup.
-    Optionally seed demo data.
+    Seed the configured RSS sources.
     """
-    print("🚀 Starting Industrial News Scanning Agent API...")
-    print("📊 Database tables created successfully")
+    print("[START] Starting Industrial News Scanning Agent API...")
+    print("[OK] Database tables created successfully")
     
     # Seed RSS sources from scoring/rss_links.txt (uncomment to enable)
     # This will add 12 European business news sources
@@ -64,21 +63,12 @@ def startup_event():
         from seed.seed_rss_sources import seed_rss_sources
         seed_rss_sources(db, force=False)
     except Exception as e:
-        print(f"⚠️  RSS source seeding skipped: {e}")
+        print(f"[WARN] RSS source seeding skipped: {e}")
     finally:
         db.close()
     
-    # Load demo articles for hackathon presentation (uncomment if needed)
-    # This is useful if RSS sources don't have new articles during demo
-    # db = SessionLocal()
-    # try:
-    #     from seed.load_demo_articles import load_demo_articles
-    #     load_demo_articles(db)
-    # finally:
-    #     db.close()
-    
-    print("✅ Application ready!")
-    print("🤖 LLM analysis and BIOS-Fit scoring enabled")
+    print("[OK] Application ready!")
+    print("[AI] LLM analysis and BIOS-Fit scoring enabled")
 
 
 if __name__ == "__main__":

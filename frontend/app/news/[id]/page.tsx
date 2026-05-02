@@ -21,7 +21,9 @@ import {
   Lock,
   Share2,
   Bookmark,
-  ExternalLink
+  ExternalLink,
+  FileText,
+  CircleDot
 } from "lucide-react"
 import { api, convertBackendArticle } from "@/lib/api"
 import { toast } from "sonner"
@@ -41,9 +43,11 @@ function getEventTypeConfig(eventType: NewsItem["event_type"]) {
     relocation: { text: "Tasinma", icon: Package, color: "bg-violet-600" },
     new_plant: { text: "Yeni Tesis", icon: Factory, color: "bg-emerald-600" },
     expansion: { text: "Genisleme", icon: TrendingUp, color: "bg-blue-600" },
-    closure: { text: "Kapanis", icon: Lock, color: "bg-red-600" }
+    closure: { text: "Kapanis", icon: Lock, color: "bg-red-600" },
+    tender: { text: "Ihale", icon: FileText, color: "bg-orange-600" },
+    other: { text: "Diger", icon: CircleDot, color: "bg-slate-600" }
   }
-  return config[eventType] || { text: eventType, icon: Package, color: "bg-slate-600" }
+  return config[eventType] || { text: eventType, icon: CircleDot, color: "bg-slate-600" }
 }
 
 function formatDate(dateStr: string) {
@@ -242,11 +246,16 @@ export default function NewsDetailPage() {
                 <div>
                   <div className={`text-5xl font-bold ${scoreColor.text}`}>{news.score}</div>
                   <div className="text-sm text-muted-foreground mt-1">{scoreColor.label}</div>
+                  {news.confidence !== undefined && (
+                    <div className="text-xs text-muted-foreground mt-1">
+                      Güven: %{Math.round(news.confidence * 100)}
+                    </div>
+                  )}
                 </div>
               </div>
               <Separator className="my-4" />
               <p className="text-sm text-muted-foreground">
-                {news.score >= 80 
+                {news.score >= 80
                   ? "Bu haber yuksek is potansiyeli tasiyor ve hemen incelenmesi oneriliyor."
                   : news.score >= 65
                   ? "Bu haber izlenmeye deger ve gelismeler takip edilmeli."
