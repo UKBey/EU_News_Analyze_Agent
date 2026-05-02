@@ -352,8 +352,8 @@ function NewsCard({ news, onClick }: { news: NewsItem; onClick: () => void }) {
   )
 }
 
-// Theme Toggle Component
-function ThemeToggle() {
+// Loading Skeleton Component
+function LoadingSkeleton() {
   return (
     <div className="space-y-6">
       {[1, 2, 3].map((i) => (
