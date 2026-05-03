@@ -4,6 +4,8 @@ from models import RSSSource, Article
 from typing import Dict, Any, Optional
 from datetime import datetime, timedelta
 
+LOCAL_TIME_OFFSET = timedelta(hours=3)
+
 
 def get_dashboard_stats(db: Session) -> Dict[str, Any]:
     source_count = db.query(RSSSource).count()
@@ -18,11 +20,16 @@ def get_dashboard_stats(db: Session) -> Dict[str, Any]:
 
     last_refresh = db.query(func.max(RSSSource.last_fetched_at)).scalar()
 
-    # Today and this-week counts (UTC)
-    today_start = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
-    week_start = today_start - timedelta(days=6)
-    today_count = db.query(Article).filter(Article.created_at >= today_start).count()
-    week_count = db.query(Article).filter(Article.created_at >= week_start).count()
+    # Today and this-week counts use local midnight (UTC+3) instead of raw UTC midnight.
+    local_now = datetime.utcnow() + LOCAL_TIME_OFFSET
+    local_today_start = local_now.replace(hour=0, minute=0, second=0, microsecond=0)
+    local_week_start = local_today_start - timedelta(days=6)
+
+    today_start_utc = local_today_start - LOCAL_TIME_OFFSET
+    week_start_utc = local_week_start - LOCAL_TIME_OFFSET
+
+    today_count = db.query(Article).filter(Article.created_at >= today_start_utc).count()
+    week_count = db.query(Article).filter(Article.created_at >= week_start_utc).count()
 
     # Top company (most articles, excluding nulls and "Bilinmiyor")
     top_company_row = (
