@@ -784,9 +784,9 @@ export default function Dashboard() {
         <div className="max-w-screen-xl mx-auto px-4 h-14 flex items-center gap-3">
           {/* Logo */}
           <div className="flex items-center gap-2 shrink-0 mr-1">
-            <Building2 className="w-6 h-6 text-primary shrink-0" />
+            <img src="/logo.png" alt="BIOS Industry Fit Checker" className="w-7 h-7 object-contain shrink-0" />
             <span className="font-bold text-foreground text-sm hidden sm:block whitespace-nowrap">
-              EU Endüstri Takip
+              BIOS Industry Fit Checker
             </span>
           </div>
 

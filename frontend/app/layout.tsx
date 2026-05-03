@@ -9,8 +9,8 @@ const _geist = Geist({ subsets: ["latin"] });
 const _geistMono = Geist_Mono({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: 'Fabrika Tasima Ajani - Avrupa Haber Tarama',
-  description: 'Avrupa fabrika tasima haberlerini takip eden AI destekli haber tarama sistemi',
+  title: 'BIOS Industry Fit Checker',
+  description: 'Avrupa endüstri haberlerini analiz eden AI destekli iş fırsatı tarama sistemi',
   generator: 'v0.app',
   icons: {
     icon: [
