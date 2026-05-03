@@ -8,6 +8,7 @@
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.115-009688?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
 [![Next.js](https://img.shields.io/badge/Next.js-16.2-000000?logo=next.js&logoColor=white)](https://nextjs.org/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.7-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
+[![Groq](https://img.shields.io/badge/Groq-Llama_3.3_70B-F55036?logo=meta&logoColor=white)](https://groq.com/)
 [![License](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 ---
@@ -33,8 +34,8 @@ An intelligent news scanning system that automatically monitors European industr
 
 ### 🔧 Backend (FastAPI + SQLite)
 - **RSS Management** - Add, delete, and refresh RSS sources dynamically
-- **AI Analysis** - Gemini 1.5 Flash integration for intelligent content processing
-- **BIOS-Fit Scoring** - Multi-factor relevance scoring algorithm
+- **AI Analysis** - Groq LLM (Llama 3.3 70B) integration for intelligent content processing
+- **BIOS-Fit Scoring** - Multi-factor relevance scoring algorithm with timeline analysis
 - **Duplicate Prevention** - Content hashing to avoid redundant articles
 - **Advanced Filtering** - Search by event type, score range, company, location
 - **RESTful API** - Complete REST API with interactive Swagger documentation
@@ -51,12 +52,14 @@ An intelligent news scanning system that automatically monitors European industr
 - **Note Taking** - Add, edit, and delete personal notes on articles
 
 ### 🤖 AI & Intelligence
-- **Event Classification** - Automatic categorization (relocation, expansion, closure, tender, etc.)
+- **Event Classification** - Automatic categorization (relocation, expansion, closure, tender, new_plant, other)
 - **Entity Extraction** - Company names, locations, and sector identification
-- **Turkish Summaries** - AI-generated Turkish language summaries
-- **Multi-factor Scoring** - Weighted scoring across 5 dimensions
+- **Turkish Summaries** - AI-generated Turkish language summaries (2-4 sentences)
+- **Timeline Detection** - Temporal analysis (0-6m, 6-18m, 18-36m timeframes)
+- **Multi-factor Scoring** - Weighted scoring across 5 dimensions (E, A, G, T, C)
 - **Confidence System** - Penalty mechanism for incomplete information
 - **Fallback Logic** - Keyword-based analysis when AI is unavailable
+- **Quota Management** - Graceful handling of API rate limits
 
 ---
 
@@ -66,7 +69,7 @@ An intelligent news scanning system that automatically monitors European industr
 
 - **Python 3.11+** - Backend runtime
 - **Node.js 18+** - Frontend runtime (npm or pnpm)
-- **Gemini API Key** - Get free API key from [Google AI Studio](https://ai.google.dev/)
+- **Groq API Key** - Get free API key from [Groq Console](https://console.groq.com/)
 
 ### Installation
 
@@ -94,7 +97,7 @@ pip install -r requirements.txt
 
 # Configure environment
 cp .env.example .env
-# Edit .env and add your GEMINI_API_KEY
+# Edit .env and add your GROQ_API_KEY
 
 # Start backend server
 uvicorn main:app --reload
@@ -148,8 +151,19 @@ Score = 100 × (0.30×E + 0.25×A + 0.20×G + 0.15×T + 0.10×C)
 | **E** - Event Type | 30% | Type of industrial event | Relocation: 1.0, New Plant: 0.9, Expansion: 0.75, Tender: 0.55, Closure: 0.45, Other: 0.1 |
 | **A** - Actor Clarity | 25% | Completeness of information | Company (+0.40), From Location (+0.25), To Location (+0.25), Sector (+0.10) |
 | **G** - Geography | 20% | Geographic relevance | Europe: 1.0, Unknown: 0.3 |
-| **T** - Time Window | 15% | Temporal specificity | Specified date: 0.8, Unspecified: 0.3 |
+| **T** - Time Window | 15% | Temporal specificity | 0-6 months: 1.0, 6-18 months: 0.7, 18-36 months: 0.4, Unspecified: 0.3 |
 | **C** - Source Trust | 10% | Source credibility | Premium: 0.85, Industry: 0.7, General: 0.55 |
+
+### Timeline Detection
+
+The system automatically detects when events will occur based on article content:
+
+| Timeline | Score | Indicators |
+|----------|-------|------------|
+| **0-6m** | 1.0 | "announced", "will move", "this year", "Q1/Q2/Q3/Q4", "soon", "upcoming" |
+| **6-18m** | 0.7 | "next year", "by [next year]", "planned for [year]" |
+| **18-36m** | 0.4 | "by 2028", "by 2029", "long-term plan", "in the coming years" |
+| **null** | 0.3 | No time indicators found in text |
 
 ### Confidence Penalty
 
@@ -172,17 +186,17 @@ if confidence < 0.40:
 
 ### Example Calculation
 
-**Article:** "BMW relocates Munich production line to Debrecen, Hungary"
+**Article:** "BMW relocates Munich production line to Debrecen, Hungary - Opening Q2 2026"
 
 ```
 E = 1.00 (relocation)
 A = 1.00 (all fields: company, from, to, sector)
 G = 1.00 (Europe: Germany → Hungary)
-T = 0.30 (date not specified)
+T = 1.00 (0-6 months: "Q2 2026" detected)
 C = 0.85 (premium source: Reuters)
 
-Score = 100 × (0.30×1.00 + 0.25×1.00 + 0.20×1.00 + 0.15×0.30 + 0.10×0.85)
-Score = 100 × 0.88 = 88 → 🟢 Green (High Opportunity)
+Score = 100 × (0.30×1.00 + 0.25×1.00 + 0.20×1.00 + 0.15×1.00 + 0.10×0.85)
+Score = 100 × 0.935 = 93.5 → 94 → 🟢 Green (High Opportunity)
 ```
 
 ---
@@ -300,7 +314,7 @@ EU_News_Analyze_Agent/
 | **SQLAlchemy** | 2.0.36 | ORM for database operations |
 | **SQLite** | - | Lightweight database (MVP) |
 | **Pydantic** | 2.10.3 | Data validation and serialization |
-| **Google Gemini** | 1.5 Flash | LLM for content analysis |
+| **Groq** | 0.13.1 | LLM API client (Llama 3.3 70B Versatile) |
 | **feedparser** | 6.0.11 | RSS/Atom feed parsing |
 | **httpx** | 0.28.1 | Async HTTP client |
 | **uvicorn** | 0.32.0 | ASGI server |
@@ -358,8 +372,8 @@ The system comes pre-configured with 12 European business news sources:
 Create a `.env` file in the `backend/` directory:
 
 ```env
-# Required: Google Gemini API Key
-GEMINI_API_KEY=your_gemini_api_key_here
+# Required: Groq API Key
+GROQ_API_KEY=your_groq_api_key_here
 
 # Database Configuration
 DATABASE_URL=sqlite:///./industrial_news.db
@@ -368,11 +382,18 @@ DATABASE_URL=sqlite:///./industrial_news.db
 CORS_ORIGINS=http://localhost:3000,http://localhost:5173,http://127.0.0.1:3000
 ```
 
-**Get Gemini API Key:**
-1. Visit [Google AI Studio](https://ai.google.dev/)
-2. Sign in with Google account
-3. Create new API key
-4. Copy and paste into `.env` file
+**Get Groq API Key:**
+1. Visit [Groq Console](https://console.groq.com/)
+2. Sign up or log in with your account
+3. Navigate to API Keys section
+4. Create new API key
+5. Copy and paste into `.env` file
+
+**Why Groq?**
+- **Fast**: Extremely low latency inference
+- **Free Tier**: Generous free quota for development
+- **Powerful**: Llama 3.3 70B model with excellent reasoning
+- **Reliable**: High availability and uptime
 
 ### Frontend Environment Variables
 
@@ -415,9 +436,11 @@ pip install -r requirements.txt
 ```
 
 **Problem: LLM analysis fails**
-- Verify `GEMINI_API_KEY` is set in `.env`
-- Check API key is valid at [Google AI Studio](https://ai.google.dev/)
+- Verify `GROQ_API_KEY` is set in `.env`
+- Check API key is valid at [Groq Console](https://console.groq.com/)
+- Check API quota at Groq Console (free tier has limits)
 - System will use fallback keyword-based analysis if LLM fails
+- If quota exhausted, article processing will pause until quota resets
 
 **Problem: Database errors**
 ```bash
@@ -496,11 +519,12 @@ npm run dev -- -p 3001
 - **Backend:** Railway, Render, Fly.io, or AWS
 - **Frontend:** Vercel, Netlify, or AWS Amplify
 - **Database:** Managed PostgreSQL (AWS RDS, Supabase)
+- **LLM:** Groq API (ensure API key is set in production environment)
 
 **Monitoring:**
 - Add application logging (Sentry, LogRocket)
 - Monitor API performance (New Relic, DataDog)
-- Track AI API usage and costs
+- Track Groq API usage and quota limits
 
 ---
 
@@ -526,7 +550,7 @@ docker-compose up -d
    ```
 
 2. **Set environment variables:**
-   - `GEMINI_API_KEY` - Your Gemini API key
+   - `GROQ_API_KEY` - Your Groq API key
    - `DATABASE_URL` - PostgreSQL connection string
    - `CORS_ORIGINS` - Your frontend URL
 
@@ -656,7 +680,8 @@ copies or substantial portions of the Software.
 
 ### Acknowledgments
 
-- **Google Gemini API** - AI-powered content analysis
+- **Groq** - Ultra-fast LLM inference with Llama 3.3 70B
+- **Meta AI** - Llama 3.3 language model
 - **FastAPI** - Modern Python web framework
 - **Next.js** - React framework for production
 - **shadcn/ui** - Beautiful and accessible UI components
