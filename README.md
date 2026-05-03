@@ -2,7 +2,8 @@
 
 > AI-powered RSS news aggregation and analysis system for tracking European industrial relocations, expansions, and business opportunities.
 
-**🏆 BSMT Hackathon 2026 Project**
+**🏆 BSMT Hackathon 2026 Project**  
+**🤝 In Collaboration with Pro Sicht**
 
 [![Python](https://img.shields.io/badge/Python-3.11+-3776AB?logo=python&logoColor=white)](https://www.python.org/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.115-009688?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
@@ -15,18 +16,19 @@
 
 ## 🎯 Overview
 
-An intelligent news scanning system that automatically monitors European industrial news and provides actionable insights through AI-powered analysis.
+An intelligent news scanning system developed for **BSMT Hackathon 2026** in collaboration with **Pro Sicht**, automatically monitoring European industrial news and providing actionable business development insights through AI-powered analysis.
 
 ### Key Capabilities
 
 - 📡 **Automated RSS Monitoring** - Fetches news from 12+ European business sources
-- 🤖 **AI Analysis** - Powered by Google Gemini 1.5 Flash for intelligent content extraction
-- 📊 **BIOS-Fit Scoring** - Proprietary algorithm scoring articles 0-100 for relevance
+- 🤖 **AI Analysis** - Powered by Groq (Llama 3.3 70B Versatile) for intelligent content extraction
+- 📊 **BIOS-Fit Scoring** - Proprietary algorithm scoring articles 0-100 for business opportunity relevance
 - 🎨 **Smart Categorization** - Color-coded priority system (Green/Blue/Yellow/Gray)
 - 🌐 **Modern Interface** - Responsive web UI with dark/light themes
 - 📝 **Note Taking** - Add personal notes to articles for team collaboration
+- ⏱️ **Timeline Detection** - Automatic temporal analysis (0-6m, 6-18m, 18-36m timeframes)
 
-**Ideal for:** Investment firms, business development teams, market researchers, and analysts tracking European industrial movements and opportunities.
+**Ideal for:** Investment firms, business development teams, market researchers, and analysts tracking European industrial movements and opportunities from a **Pro Sicht / BIOS perspective**.
 
 ---
 
@@ -136,7 +138,7 @@ npm run dev
 
 ## 📊 BIOS-Fit Scoring System
 
-The proprietary BIOS-Fit algorithm evaluates each article across 5 weighted dimensions to produce a relevance score from 0-100.
+The proprietary **BIOS-Fit algorithm** evaluates each article from a **Pro Sicht / BIOS perspective** to determine its value as a "business development opportunity" on a 0-100 scale. This weighted metric helps prioritize which industrial news deserves immediate attention.
 
 ### Formula
 
@@ -144,15 +146,17 @@ The proprietary BIOS-Fit algorithm evaluates each article across 5 weighted dime
 Score = 100 × (0.30×E + 0.25×A + 0.20×G + 0.15×T + 0.10×C)
 ```
 
+**Rationale:** Event type (E) is most decisive because a tender announcement and a factory relocation have different values for BIOS. Actor clarity (A) is second priority because without knowing which company is moving where, the opportunity cannot be acted upon. Geography (G) is critical as Pro Sicht's operational area is Europe. Timeline (T) and source trust (C) are fine-tuning components for ranking.
+
 ### Scoring Components
 
-| Component | Weight | Description | Example Values |
-|-----------|--------|-------------|----------------|
+| Component | Weight | Description | Scoring Rules |
+|-----------|--------|-------------|---------------|
 | **E** - Event Type | 30% | Type of industrial event | Relocation: 1.0, New Plant: 0.9, Expansion: 0.75, Tender: 0.55, Closure: 0.45, Other: 0.1 |
 | **A** - Actor Clarity | 25% | Completeness of information | Company (+0.40), From Location (+0.25), To Location (+0.25), Sector (+0.10) |
-| **G** - Geography | 20% | Geographic relevance | Europe: 1.0, Unknown: 0.3 |
+| **G** - Geography | 20% | Geographic relevance | Europe (EU + UK + Turkey + Balkans): 1.0, Europe Neighborhood (Russia, North Africa): 0.5, Other: 0.1, Unknown: 0.3 |
 | **T** - Time Window | 15% | Temporal specificity | 0-6 months: 1.0, 6-18 months: 0.7, 18-36 months: 0.4, Unspecified: 0.3 |
-| **C** - Source Trust | 10% | Source credibility | Premium: 0.85, Industry: 0.7, General: 0.55 |
+| **C** - Source Trust | 10% | Source credibility | Company Official/IR: 1.0, Premium News (Reuters, Bloomberg, FT): 0.85, Industry Publication: 0.7, General News: 0.55, Blog/Forum: 0.25 |
 
 ### Timeline Detection
 
@@ -160,7 +164,7 @@ The system automatically detects when events will occur based on article content
 
 | Timeline | Score | Indicators |
 |----------|-------|------------|
-| **0-6m** | 1.0 | "announced", "will move", "this year", "Q1/Q2/Q3/Q4", "soon", "upcoming" |
+| **0-6m** | 1.0 | "announced", "will move", "will open", "this year", "Q1/Q2/Q3/Q4", "soon", "upcoming", "imminently" |
 | **6-18m** | 0.7 | "next year", "by [next year]", "planned for [year]" |
 | **18-36m** | 0.4 | "by 2028", "by 2029", "long-term plan", "in the coming years" |
 | **null** | 0.3 | No time indicators found in text |
@@ -179,24 +183,39 @@ if confidence < 0.40:
 
 | Score Range | Label | Color | Action |
 |-------------|-------|-------|--------|
-| 80-100 | Yüksek Fırsat | 🟢 Green | High opportunity - immediate action required |
-| 65-79 | İzlenecek | 🔵 Blue | Worth watching - monitor developments |
-| 50-64 | Şartlı İlgi | 🟡 Yellow | Conditional interest - needs more information |
-| 0-49 | Düşük Alaka | ⚪ Gray | Low relevance - archive |
+| 80-100 | Yüksek Fırsat (High Opportunity) | 🟢 Green | Reach out immediately / request documents |
+| 65-79 | İzlenecek (Worth Watching) | 🔵 Blue | Add to watchlist, show in weekly report |
+| 50-64 | Şartlı İlgi (Conditional Interest) | 🟡 Yellow | If tender: track bidding; else: seek partners |
+| 0-49 | Düşük Alaka (Low Relevance) | ⚪ Gray | Archive, keep for search only |
 
 ### Example Calculation
 
-**Article:** "BMW relocates Munich production line to Debrecen, Hungary - Opening Q2 2026"
+**Article:** "BMW relocates Munich production line to Debrecen, Hungary - Process will complete in Q1 2026 (Source: Reuters)"
 
+**Extracted Data:**
+- event_type = relocation
+- company = "BMW"
+- from_location = "Munich, Germany"
+- to_location = "Debrecen, Hungary"
+- sector = "automotive"
+- timeline = "Q1 2026" (~6 months)
+- source = Reuters
+
+**Component Scores:**
 ```
 E = 1.00 (relocation)
-A = 1.00 (all fields: company, from, to, sector)
-G = 1.00 (Europe: Germany → Hungary)
-T = 1.00 (0-6 months: "Q2 2026" detected)
-C = 0.85 (premium source: Reuters)
+A = 1.00 (all 4 fields clear: 0.40 + 0.25 + 0.25 + 0.10)
+G = 1.00 (Germany → Hungary, both in Europe)
+T = 1.00 (within 6 months)
+C = 0.85 (Reuters, premium news agency)
 
 Score = 100 × (0.30×1.00 + 0.25×1.00 + 0.20×1.00 + 0.15×1.00 + 0.10×0.85)
-Score = 100 × 0.935 = 93.5 → 94 → 🟢 Green (High Opportunity)
+Score = 100 × (0.30 + 0.25 + 0.20 + 0.15 + 0.085)
+Score = 100 × 0.985 = 98.5 → 99 (rounded)
+
+Confidence = 5/5 = 1.00 (no penalty applied)
+Label: Yüksek Fırsat (🟢 Green)
+Action: reach_out
 ```
 
 ---
