@@ -16,7 +16,7 @@ import {
   Building2, Search, RefreshCw, Trash2, Plus, ArrowRight, MapPin, Newspaper,
   Package, Factory, TrendingUp, Lock, Moon, Sun, Star, Timer, FileText, CircleDot,
   Rss, LayoutGrid, LayoutList, X, CalendarDays, Calendar, Globe, BarChart2,
-  AlertTriangle,
+  AlertTriangle, Download,
 } from "lucide-react"
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
@@ -423,11 +423,16 @@ interface RssPanelProps {
   onMaxChange: (v: number) => void
   onAdd: (name: string, url: string) => Promise<void>
   onRemove: (id: number) => Promise<void>
+  onFetchSource: (sourceId: number, count: number) => Promise<void>
+  isRefreshing: boolean
 }
 
-function RssPanel({ sources, maxPerSource, onMaxChange, onAdd, onRemove }: RssPanelProps) {
+function RssPanel({ sources, maxPerSource, onMaxChange, onAdd, onRemove, onFetchSource, isRefreshing }: RssPanelProps) {
   const [nameInput, setNameInput] = useState("")
   const [urlInput, setUrlInput] = useState("")
+  const [fetchCounts, setFetchCounts] = useState<Record<number, number>>({})
+
+  const getFetchCount = (id: number) => fetchCounts[id] ?? 5
 
   const handleAdd = async () => {
     await onAdd(nameInput, urlInput)
@@ -463,21 +468,21 @@ function RssPanel({ sources, maxPerSource, onMaxChange, onAdd, onRemove }: RssPa
 
       <Separator />
 
-      {/* Fetch settings */}
+      {/* Global fetch settings */}
       <div className="space-y-2">
-        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Çekim Ayarları</p>
+        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Toplu Çekim Ayarı</p>
         <div>
-          <label className="text-xs text-muted-foreground mb-1.5 block">Kaynak başına max haber</label>
+          <label className="text-xs text-muted-foreground mb-1.5 block">Kaynak başına max haber (Yenile butonu)</label>
           <Select value={String(maxPerSource)} onValueChange={v => onMaxChange(Number(v))}>
             <SelectTrigger className="h-9">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="1">1 haber (en az istek)</SelectItem>
-              <SelectItem value="3">3 haber</SelectItem>
+              <SelectItem value="1">1 haber</SelectItem>
               <SelectItem value="5">5 haber (önerilen)</SelectItem>
               <SelectItem value="10">10 haber</SelectItem>
-              <SelectItem value="20">20 haber (max)</SelectItem>
+              <SelectItem value="25">25 haber</SelectItem>
+              <SelectItem value="50">50 haber</SelectItem>
             </SelectContent>
           </Select>
           <p className="text-xs text-muted-foreground mt-1.5">
@@ -493,16 +498,16 @@ function RssPanel({ sources, maxPerSource, onMaxChange, onAdd, onRemove }: RssPa
         <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
           Kaynaklar ({sources.length})
         </p>
-        <div>
-          <div className="space-y-2">
-            {sources.length === 0 ? (
-              <p className="text-sm text-muted-foreground italic py-6 text-center">Kaynak eklenmedi</p>
-            ) : (
-              sources.map(src => (
-                <div
-                  key={src.id}
-                  className="flex items-start gap-3 px-3 py-2.5 rounded-lg bg-muted/50 hover:bg-muted transition-colors group"
-                >
+        <div className="space-y-2">
+          {sources.length === 0 ? (
+            <p className="text-sm text-muted-foreground italic py-6 text-center">Kaynak eklenmedi</p>
+          ) : (
+            sources.map(src => (
+              <div
+                key={src.id}
+                className="flex flex-col gap-2 px-3 py-2.5 rounded-lg bg-muted/50 hover:bg-muted transition-colors group"
+              >
+                <div className="flex items-start gap-3">
                   <div
                     className={`w-2 h-2 rounded-full mt-1.5 shrink-0 ${src.is_active ? "bg-emerald-500" : "bg-red-400"}`}
                     title={src.is_active ? "Aktif" : "Pasif"}
@@ -526,9 +531,32 @@ function RssPanel({ sources, maxPerSource, onMaxChange, onAdd, onRemove }: RssPa
                     <Trash2 className="w-3.5 h-3.5" />
                   </Button>
                 </div>
-              ))
-            )}
-          </div>
+                {/* Per-source fetch row */}
+                <div className="flex items-center gap-2 pl-5">
+                  <input
+                    type="number"
+                    min={1}
+                    max={100}
+                    value={getFetchCount(src.id)}
+                    onChange={e => setFetchCounts(prev => ({ ...prev, [src.id]: Math.max(1, Math.min(100, Number(e.target.value))) }))}
+                    className="w-16 h-7 rounded-md border border-border bg-background px-2 text-xs text-center focus:outline-none focus:ring-1 focus:ring-ring"
+                    disabled={isRefreshing}
+                  />
+                  <span className="text-xs text-muted-foreground">haber</span>
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    className="h-7 px-2.5 text-xs gap-1.5 ml-auto"
+                    disabled={isRefreshing || !src.is_active}
+                    onClick={() => onFetchSource(src.id, getFetchCount(src.id))}
+                  >
+                    <Download className="w-3 h-3" />
+                    Çek
+                  </Button>
+                </div>
+              </div>
+            ))
+          )}
         </div>
       </div>
 
@@ -579,7 +607,7 @@ export default function Dashboard() {
   const loadNews = useCallback(async () => {
     setIsLoading(true)
     try {
-      const res = await api.getArticles({ limit: 200 })
+      const res = await api.getArticles({ limit: 10000 })
       const items = res.items.map(convertBackendArticle)
       setNews(items)
       setLastRefresh(new Date())
@@ -615,18 +643,68 @@ export default function Dashboard() {
   const handleRefresh = useCallback(async () => {
     setIsRefreshing(true)
     try {
-      const res = await api.refreshArticles(maxPerSource)
-      toast.success(`${res.new_articles} yeni haber eklendi, ${res.duplicates_skipped} tekrar atlandı`)
-      await loadNews()
-      await loadRSSSources()
-      await loadStats()
-      setCountdown(60)
+      await api.refreshArticlesStream(
+        maxPerSource,
+        (article) => {
+          const item = convertBackendArticle(article)
+          setNews(prev => {
+            const updated = [item, ...prev.filter(n => n.id !== item.id)]
+            setTotals({ all: updated.length, high: updated.filter(i => i.score >= 80).length })
+            return updated
+          })
+          loadStats()
+        },
+        async (summary) => {
+          toast.success(
+            `${summary.new_articles} yeni haber eklendi, ${summary.duplicates_skipped} tekrar atlandı`
+          )
+          await loadRSSSources()
+          await loadStats()
+          setCountdown(60)
+        },
+        (message) => {
+          toast.error(message, { duration: 6000 })
+        },
+      )
     } catch (e: any) {
       toast.error(e?.message || "Yenileme başarısız", { duration: 6000 })
     } finally {
       setIsRefreshing(false)
     }
-  }, [loadNews, loadRSSSources, loadStats, maxPerSource])
+  }, [loadRSSSources, loadStats, maxPerSource])
+
+  const handleRefreshSource = useCallback(async (sourceId: number, count: number) => {
+    setIsRefreshing(true)
+    try {
+      await api.refreshArticlesStream(
+        count,
+        (article) => {
+          const item = convertBackendArticle(article)
+          setNews(prev => {
+            const updated = [item, ...prev.filter(n => n.id !== item.id)]
+            setTotals({ all: updated.length, high: updated.filter(i => i.score >= 80).length })
+            return updated
+          })
+          loadStats()
+        },
+        async (summary) => {
+          toast.success(
+            `${summary.new_articles} yeni haber eklendi, ${summary.duplicates_skipped} tekrar atlandı`
+          )
+          await loadRSSSources()
+          await loadStats()
+        },
+        (message) => {
+          toast.error(message, { duration: 6000 })
+        },
+        sourceId,
+      )
+    } catch (e: any) {
+      toast.error(e?.message || "Yenileme başarısız", { duration: 6000 })
+    } finally {
+      setIsRefreshing(false)
+    }
+  }, [loadRSSSources, loadStats])
 
   useEffect(() => {
     if (!autoRefresh) return
@@ -760,6 +838,42 @@ export default function Dashboard() {
               </Badge>
             )}
           </Button>
+
+          {/* Delete all */}
+          <AlertDialog>
+            <AlertDialogTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-9 w-9 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+                aria-label="Tüm haberleri sil"
+                disabled={news.length === 0}
+              >
+                <Trash2 className="w-4 h-4" />
+              </Button>
+            </AlertDialogTrigger>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle className="flex items-center gap-2">
+                  <AlertTriangle className="w-5 h-5 text-destructive" />
+                  Tüm haberleri sil
+                </AlertDialogTitle>
+                <AlertDialogDescription>
+                  Veritabanındaki <strong>{news.length} haber</strong> kalıcı olarak silinecek.
+                  Bu işlem geri alınamaz.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>İptal</AlertDialogCancel>
+                <AlertDialogAction
+                  className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                  onClick={handleDeleteAll}
+                >
+                  Evet, Sil
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
 
           {/* Refresh */}
           <Button
@@ -975,6 +1089,8 @@ export default function Dashboard() {
               onMaxChange={setMaxPerSource}
               onAdd={addSource}
               onRemove={removeSource}
+              onFetchSource={handleRefreshSource}
+              isRefreshing={isRefreshing}
             />
           </div>
         </SheetContent>

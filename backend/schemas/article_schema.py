@@ -73,3 +73,12 @@ class ScoreBreakdownResponse(BaseModel):
     max_G: int = 20
     max_T: int = 15
     max_C: int = 10
+
+
+class ArticleUpdateRequest(BaseModel):
+    event_type: Optional[str] = None
+    company: Optional[str] = None
+    from_location: Optional[str] = None
+    to_location: Optional[str] = None
+    sector: Optional[str] = None
+    timeline: Optional[str] = None

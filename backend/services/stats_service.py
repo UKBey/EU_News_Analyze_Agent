@@ -44,14 +44,21 @@ def get_dashboard_stats(db: Session) -> Dict[str, Any]:
     top_source: Optional[str] = top_source_row[0] if top_source_row else None
 
     # Top country — extract from from_location / to_location (take part after last comma)
+    # Exclude nulls, empty strings, and LLM-generated "null" string values
+    _loc_filter = lambda col: (
+        col.isnot(None),
+        col != "",
+        col != "null",
+        col != "None",
+    )
     country_counts: Dict[str, int] = {}
-    for (loc,) in db.query(Article.from_location).filter(Article.from_location.isnot(None)).all():
+    for (loc,) in db.query(Article.from_location).filter(*_loc_filter(Article.from_location)).all():
         country = loc.rsplit(",", 1)[-1].strip()
-        if country:
+        if country and country.lower() not in ("null", "none", ""):
             country_counts[country] = country_counts.get(country, 0) + 1
-    for (loc,) in db.query(Article.to_location).filter(Article.to_location.isnot(None)).all():
+    for (loc,) in db.query(Article.to_location).filter(*_loc_filter(Article.to_location)).all():
         country = loc.rsplit(",", 1)[-1].strip()
-        if country:
+        if country and country.lower() not in ("null", "none", ""):
             country_counts[country] = country_counts.get(country, 0) + 1
     top_country: Optional[str] = max(country_counts, key=country_counts.get) if country_counts else None
 

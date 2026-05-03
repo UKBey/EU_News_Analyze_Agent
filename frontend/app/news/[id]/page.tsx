@@ -8,12 +8,25 @@ import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Textarea } from "@/components/ui/textarea"
+import { Input } from "@/components/ui/input"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog"
 import {
   ArrowLeft, ArrowRight, Building2, Calendar, MapPin, Newspaper,
   Package, Factory, TrendingUp, Lock, ExternalLink, FileText, CircleDot,
-  Star, ChevronRight, StickyNote, Pencil, Trash2, Check, X, Info,
+  Star, ChevronRight, StickyNote, Pencil, Trash2, Check, X, Info, Save,
 } from "lucide-react"
-import { api, convertBackendArticle, type BackendScoreBreakdown, type BackendNote } from "@/lib/api"
+import { api, convertBackendArticle, type BackendArticle, type BackendScoreBreakdown, type BackendNote } from "@/lib/api"
 import { toast } from "sonner"
 import { stripHtmlTags } from "@/lib/utils"
 import type { NewsItem } from "@/app/page"
@@ -148,7 +161,7 @@ function ScoreCard({ score, confidence }: { score: number; confidence?: number }
 
 // ─── Score Breakdown Card ─────────────────────────────────────────────────────
 
-const BREAKDOWN_LABELS: Record<string, { short: string; full: string; color: string }> = {
+const BREAKDOWN_META: Record<string, { short: string; full: string; color: string }> = {
   E: { short: "E", full: "Olay Tipi",     color: "bg-violet-500" },
   A: { short: "A", full: "Aktör Netliği", color: "bg-blue-500"   },
   G: { short: "G", full: "Coğrafya",      color: "bg-emerald-500"},
@@ -156,15 +169,140 @@ const BREAKDOWN_LABELS: Record<string, { short: string; full: string; color: str
   C: { short: "C", full: "Kaynak Güveni", color: "bg-orange-500" },
 }
 
-function ScoreBreakdownCard({ breakdown }: { breakdown: BackendScoreBreakdown }) {
-  const rows: Array<{ key: string; contrib: number; max: number }> = [
-    { key: "E", contrib: breakdown.contribution_E, max: breakdown.max_E },
-    { key: "A", contrib: breakdown.contribution_A, max: breakdown.max_A },
-    { key: "G", contrib: breakdown.contribution_G, max: breakdown.max_G },
-    { key: "T", contrib: breakdown.contribution_T, max: breakdown.max_T },
-    { key: "C", contrib: breakdown.contribution_C, max: breakdown.max_C },
+const EVENT_TYPE_OPTIONS = [
+  { value: "relocation", label: "Taşınma" },
+  { value: "new_plant",  label: "Yeni Tesis" },
+  { value: "expansion",  label: "Genişleme" },
+  { value: "closure",    label: "Kapanış" },
+  { value: "tender",     label: "İhale" },
+  { value: "other",      label: "Diğer" },
+]
+
+const TIMELINE_OPTIONS = [
+  { value: "0-6m",   label: "0-6 ay (Kısa vadeli)" },
+  { value: "6-18m",  label: "6-18 ay (Orta vadeli)" },
+  { value: "18-36m", label: "18-36 ay (Uzun vadeli)" },
+  { value: "__none__", label: "Belirtilmemiş" },
+]
+
+interface ScoreBreakdownCardProps {
+  breakdown: BackendScoreBreakdown
+  score: number
+  article: BackendArticle
+  onUpdate: (updated: BackendArticle) => void
+}
+
+function ScoreBreakdownCard({ breakdown, score, article, onUpdate }: ScoreBreakdownCardProps) {
+  const [isEditing, setIsEditing] = useState(false)
+  const [isSaving, setIsSaving] = useState(false)
+  const [form, setForm] = useState({
+    event_type: article.event_type ?? "other",
+    company: article.company ?? "",
+    from_location: article.from_location ?? "",
+    to_location: article.to_location ?? "",
+    sector: article.sector ?? "",
+    timeline: article.timeline ?? "__none__",
+  })
+
+  const startEdit = () => {
+    setForm({
+      event_type: article.event_type ?? "other",
+      company: article.company ?? "",
+      from_location: article.from_location ?? "",
+      to_location: article.to_location ?? "",
+      sector: article.sector ?? "",
+      timeline: article.timeline ?? "__none__",
+    })
+    setIsEditing(true)
+  }
+
+  const handleSave = async () => {
+    setIsSaving(true)
+    try {
+      const updated = await api.updateArticle(article.id, {
+        event_type: form.event_type,
+        company: form.company.trim() || null,
+        from_location: form.from_location.trim() || null,
+        to_location: form.to_location.trim() || null,
+        sector: form.sector.trim() || null,
+        timeline: form.timeline === "__none__" ? null : form.timeline,
+      })
+      onUpdate(updated)
+      setIsEditing(false)
+    } catch {
+      toast.error("Kaydedilemedi")
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
+  // ── value hints per dimension ───────────────────────────────────────────
+  const eventLabel = EVENT_TYPE_OPTIONS.find(o => o.value === article.event_type)?.label ?? "Diğer"
+
+  const actorChips = [
+    { label: "Şirket",  present: !!article.company },
+    { label: "Çıkış",   present: !!article.from_location },
+    { label: "Varış",   present: !!article.to_location },
+    { label: "Sektör",  present: !!article.sector },
   ]
-  const total = rows.reduce((s, r) => s + r.contrib, 0)
+
+  const locStr = (article.from_location ?? "") + (article.to_location ?? "")
+  const isEU = ["almanya","fransa","ingiltere","türkiye","macaristan","avrupa","germany","france",
+    "uk","turkey","hungary","scotland","edinburgh","poland","polonya","czech","çek","romania",
+    "romanya","italy","italya","spain","ispanya","portugal","portekiz","netherlands","hollanda",
+    "belgium","belçika","austria","avusturya","sweden","isveç","denmark","danimarka","finland",
+    "finlandiya","norway","norveç","ireland","irlanda","greece","yunanistan","bulgaria","bulgaristan",
+  ].some(k => locStr.toLowerCase().includes(k))
+
+  const timelineLabel = TIMELINE_OPTIONS.find(o => o.value === (article.timeline ?? ""))?.label
+    ?? "Belirtilmemiş"
+
+  const sourceTrustLabel =
+    breakdown.source_trust_score >= 0.8 ? "Yüksek Güven"
+    : breakdown.source_trust_score >= 0.65 ? "İyi Güven"
+    : "Standart"
+
+  const rows: Array<{ key: string; contrib: number; max: number; hint: React.ReactNode }> = [
+    {
+      key: "E", contrib: breakdown.contribution_E, max: breakdown.max_E,
+      hint: <span className="text-xs text-muted-foreground italic">{eventLabel}</span>,
+    },
+    {
+      key: "A", contrib: breakdown.contribution_A, max: breakdown.max_A,
+      hint: (
+        <span className="flex flex-wrap gap-1">
+          {actorChips.map(c => (
+            <span
+              key={c.label}
+              className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${
+                c.present
+                  ? "bg-blue-100 dark:bg-blue-950/50 text-blue-700 dark:text-blue-300"
+                  : "bg-muted text-muted-foreground line-through"
+              }`}
+            >
+              {c.label}
+            </span>
+          ))}
+        </span>
+      ),
+    },
+    {
+      key: "G", contrib: breakdown.contribution_G, max: breakdown.max_G,
+      hint: (
+        <span className={`text-xs italic ${isEU ? "text-emerald-600 dark:text-emerald-400" : "text-muted-foreground"}`}>
+          {isEU ? "AB Bölgesi" : "AB Dışı"}
+        </span>
+      ),
+    },
+    {
+      key: "T", contrib: breakdown.contribution_T, max: breakdown.max_T,
+      hint: <span className="text-xs text-muted-foreground italic">{timelineLabel}</span>,
+    },
+    {
+      key: "C", contrib: breakdown.contribution_C, max: breakdown.max_C,
+      hint: <span className="text-xs text-muted-foreground italic">{sourceTrustLabel}</span>,
+    },
+  ]
 
   return (
     <Card className="p-5">
@@ -172,26 +310,40 @@ function ScoreBreakdownCard({ breakdown }: { breakdown: BackendScoreBreakdown })
         <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider flex-1">
           Skor Dökümü
         </p>
-        <span className="text-xs text-muted-foreground flex items-center gap-1">
+        <span className="text-xs text-muted-foreground hidden sm:flex items-center gap-1">
           <Info className="w-3 h-3" />
-          100 × (0.30E + 0.25A + 0.20G + 0.15T + 0.10C)
+          0.30E + 0.25A + 0.20G + 0.15T + 0.10C
         </span>
+        {!isEditing && (
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-6 w-6 text-muted-foreground hover:text-foreground"
+            onClick={startEdit}
+          >
+            <Pencil className="w-3.5 h-3.5" />
+          </Button>
+        )}
       </div>
 
+      {/* Breakdown rows */}
       <div className="space-y-3">
-        {rows.map(({ key, contrib, max }) => {
-          const lbl = BREAKDOWN_LABELS[key]
+        {rows.map(({ key, contrib, max, hint }) => {
+          const lbl = BREAKDOWN_META[key]
           const pct = max > 0 ? (contrib / max) * 100 : 0
           return (
             <div key={key}>
-              <div className="flex items-center justify-between text-xs mb-1">
-                <span className="flex items-center gap-1.5">
-                  <span className={`w-4 h-4 rounded text-white text-[10px] font-bold flex items-center justify-center ${lbl.color}`}>
+              <div className="flex items-start justify-between gap-2 text-xs mb-1.5">
+                <div className="flex items-start gap-1.5 min-w-0 flex-1">
+                  <span className={`w-4 h-4 rounded text-white text-[10px] font-bold flex items-center justify-center shrink-0 mt-0.5 ${lbl.color}`}>
                     {lbl.short}
                   </span>
-                  <span className="text-foreground font-medium">{lbl.full}</span>
-                </span>
-                <span className="font-mono text-muted-foreground">
+                  <div className="flex flex-col gap-0.5 min-w-0">
+                    <span className="text-foreground font-medium leading-none">{lbl.full}</span>
+                    <div className="leading-tight">{hint}</div>
+                  </div>
+                </div>
+                <span className="font-mono text-muted-foreground shrink-0">
                   <span className="text-foreground font-semibold">{contrib}</span>/{max}pt
                 </span>
               </div>
@@ -209,8 +361,131 @@ function ScoreBreakdownCard({ breakdown }: { breakdown: BackendScoreBreakdown })
       <Separator className="my-4" />
       <div className="flex items-center justify-between text-sm">
         <span className="text-muted-foreground">Toplam</span>
-        <span className="font-bold text-foreground">{total} / 100 puan</span>
+        <span className="font-bold text-foreground">{score} / 100 puan</span>
       </div>
+
+      {/* ── Edit form ─────────────────────────────────────────────────────── */}
+      {isEditing && (
+        <>
+          <Separator className="mb-4" />
+          <div className="space-y-3">
+            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+              Alanları Düzenle
+            </p>
+
+            {/* E — event_type */}
+            <div className="space-y-1">
+              <label className="text-xs text-muted-foreground flex items-center gap-1">
+                <span className="w-3.5 h-3.5 rounded bg-violet-500 text-white text-[9px] font-bold flex items-center justify-center">E</span>
+                Olay Tipi
+              </label>
+              <Select
+                value={form.event_type}
+                onValueChange={v => setForm(f => ({ ...f, event_type: v }))}
+              >
+                <SelectTrigger className="h-8 text-xs">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {EVENT_TYPE_OPTIONS.map(o => (
+                    <SelectItem key={o.value} value={o.value} className="text-xs">{o.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* A — actor fields */}
+            <div className="space-y-1.5">
+              <label className="text-xs text-muted-foreground flex items-center gap-1">
+                <span className="w-3.5 h-3.5 rounded bg-blue-500 text-white text-[9px] font-bold flex items-center justify-center">A</span>
+                Aktör Alanları
+              </label>
+              <Input
+                placeholder="Şirket adı"
+                value={form.company}
+                onChange={e => setForm(f => ({ ...f, company: e.target.value }))}
+                className="h-8 text-xs"
+              />
+              <Input
+                placeholder="Çıkış lokasyonu (ör. Berlin, Germany)"
+                value={form.from_location}
+                onChange={e => setForm(f => ({ ...f, from_location: e.target.value }))}
+                className="h-8 text-xs"
+              />
+              <Input
+                placeholder="Varış lokasyonu (ör. Warsaw, Poland)"
+                value={form.to_location}
+                onChange={e => setForm(f => ({ ...f, to_location: e.target.value }))}
+                className="h-8 text-xs"
+              />
+              <Input
+                placeholder="Sektör (ör. Otomotiv)"
+                value={form.sector}
+                onChange={e => setForm(f => ({ ...f, sector: e.target.value }))}
+                className="h-8 text-xs"
+              />
+            </div>
+
+            {/* G note */}
+            <p className="text-xs text-muted-foreground flex items-center gap-1">
+              <span className="w-3.5 h-3.5 rounded bg-emerald-500 text-white text-[9px] font-bold flex items-center justify-center">G</span>
+              Coğrafya skoru lokasyon alanlarından otomatik hesaplanır
+            </p>
+
+            {/* T — timeline */}
+            <div className="space-y-1">
+              <label className="text-xs text-muted-foreground flex items-center gap-1">
+                <span className="w-3.5 h-3.5 rounded bg-amber-500 text-white text-[9px] font-bold flex items-center justify-center">T</span>
+                Zaman Penceresi
+              </label>
+              <Select
+                value={form.timeline}
+                onValueChange={v => setForm(f => ({ ...f, timeline: v }))}
+              >
+                <SelectTrigger className="h-8 text-xs">
+                  <SelectValue placeholder="Seçiniz" />
+                </SelectTrigger>
+                <SelectContent>
+                  {TIMELINE_OPTIONS.map(o => (
+                    <SelectItem key={o.value || "__none__"} value={o.value} className="text-xs">
+                      {o.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* C note */}
+            <p className="text-xs text-muted-foreground flex items-center gap-1">
+              <span className="w-3.5 h-3.5 rounded bg-orange-500 text-white text-[9px] font-bold flex items-center justify-center">C</span>
+              Kaynak güveni RSS kaynağından otomatik belirlenir
+            </p>
+
+            {/* Actions */}
+            <div className="flex justify-end gap-2 pt-1">
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-8 text-xs"
+                onClick={() => setIsEditing(false)}
+                disabled={isSaving}
+              >
+                <X className="w-3.5 h-3.5 mr-1" />
+                İptal
+              </Button>
+              <Button
+                size="sm"
+                className="h-8 text-xs gap-1.5"
+                onClick={handleSave}
+                disabled={isSaving}
+              >
+                <Save className="w-3.5 h-3.5" />
+                {isSaving ? "Kaydediliyor..." : "Kaydet"}
+              </Button>
+            </div>
+          </div>
+        </>
+      )}
     </Card>
   )
 }
@@ -453,9 +728,11 @@ export default function NewsDetailPage() {
   const newsId = Number(params.id)
 
   const [news, setNews] = useState<NewsItem | null>(null)
+  const [rawArticle, setRawArticle] = useState<BackendArticle | null>(null)
   const [relatedNews, setRelatedNews] = useState<NewsItem[]>([])
   const [breakdown, setBreakdown] = useState<BackendScoreBreakdown | null>(null)
   const [isLoading, setIsLoading] = useState(true)
+  const [isDeleting, setIsDeleting] = useState(false)
 
   useEffect(() => {
     loadDetail()
@@ -468,6 +745,7 @@ export default function NewsDetailPage() {
         api.getArticle(newsId),
         api.getScoreBreakdown(newsId).catch(() => null),
       ])
+      setRawArticle(article)
       setNews(convertBackendArticle(article))
       setBreakdown(bd)
 
@@ -479,6 +757,27 @@ export default function NewsDetailPage() {
       toast.error("Haber yüklenemedi")
     } finally {
       setIsLoading(false)
+    }
+  }
+
+  const handleArticleUpdate = async (updated: BackendArticle) => {
+    setRawArticle(updated)
+    setNews(convertBackendArticle(updated))
+    const bd = await api.getScoreBreakdown(newsId).catch(() => null)
+    setBreakdown(bd)
+    toast.success("Haber güncellendi, skor yeniden hesaplandı")
+  }
+
+  const handleArticleDelete = async () => {
+    setIsDeleting(true)
+    try {
+      await api.deleteArticle(newsId)
+      toast.success("Haber silindi")
+      router.push("/")
+    } catch {
+      toast.error("Haber silinemedi")
+    } finally {
+      setIsDeleting(false)
     }
   }
 
@@ -524,17 +823,51 @@ export default function NewsDetailPage() {
             <ArrowLeft className="w-4 h-4" />
             Geri Dön
           </Button>
-          {news.link && (
-            <Button
-              variant="outline"
-              size="sm"
-              className="gap-2"
-              onClick={() => window.open(news.link, "_blank")}
-            >
-              <ExternalLink className="w-4 h-4" />
-              <span className="hidden sm:inline">Kaynağa Git</span>
-            </Button>
-          )}
+          <div className="flex items-center gap-2">
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="gap-2 text-muted-foreground hover:text-destructive"
+                  disabled={isDeleting}
+                >
+                  <Trash2 className="w-4 h-4" />
+                  <span className="hidden sm:inline">Sil</span>
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Haberi sil</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    Bu haber ve bağlı notlar kalıcı olarak silinecek. Bu işlem geri alınamaz.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel disabled={isDeleting}>İptal</AlertDialogCancel>
+                  <AlertDialogAction
+                    className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                    onClick={handleArticleDelete}
+                    disabled={isDeleting}
+                  >
+                    {isDeleting ? "Siliniyor..." : "Evet, sil"}
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+
+            {news.link && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="gap-2"
+                onClick={() => window.open(news.link, "_blank")}
+              >
+                <ExternalLink className="w-4 h-4" />
+                <span className="hidden sm:inline">Kaynağa Git</span>
+              </Button>
+            )}
+          </div>
         </div>
       </header>
 
@@ -608,7 +941,14 @@ export default function NewsDetailPage() {
           {/* Sidebar */}
           <div className="space-y-4">
             <ScoreCard score={news.score} confidence={news.confidence} />
-            {breakdown && <ScoreBreakdownCard breakdown={breakdown} />}
+            {breakdown && rawArticle && (
+              <ScoreBreakdownCard
+                breakdown={breakdown}
+                score={news.score}
+                article={rawArticle}
+                onUpdate={handleArticleUpdate}
+              />
+            )}
             <LocationCard from={news.from_location} to={news.to_location} />
 
             {relatedNews.length > 0 && (

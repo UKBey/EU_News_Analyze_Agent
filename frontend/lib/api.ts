@@ -17,11 +17,21 @@ export interface BackendArticle {
   from_location: string | null
   to_location: string | null
   sector: string | null
+  timeline: string | null
   score: number
   confidence: number
   action_label: string | null
   color_label: string | null
   created_at: string
+}
+
+export interface ArticleUpdatePayload {
+  event_type?: string
+  company?: string | null
+  from_location?: string | null
+  to_location?: string | null
+  sector?: string | null
+  timeline?: string | null
 }
 
 export interface BackendArticleList {
@@ -218,8 +228,70 @@ export const api = {
     return request<BackendArticle>(`/api/articles/${id}`)
   },
 
+  updateArticle(id: number, payload: ArticleUpdatePayload): Promise<BackendArticle> {
+    return request<BackendArticle>(`/api/articles/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(payload),
+    })
+  },
+
+  deleteArticle(id: number): Promise<{ message: string; deleted_notes?: number }> {
+    return request<{ message: string; deleted_notes?: number }>(`/api/articles/${id}`, {
+      method: "DELETE",
+    })
+  },
+
   getScoreBreakdown(id: number): Promise<BackendScoreBreakdown> {
     return request<BackendScoreBreakdown>(`/api/articles/${id}/breakdown`)
+  },
+
+  async refreshArticlesStream(
+    maxPerSource: number,
+    onArticle: (article: BackendArticle) => void,
+    onDone: (summary: { new_articles: number; duplicates_skipped: number; errors: string[] }) => void,
+    onError: (message: string) => void,
+    sourceId?: number,
+  ): Promise<void> {
+    const qs = new URLSearchParams({ max_per_source: String(maxPerSource) })
+    if (sourceId !== undefined) qs.set("source_id", String(sourceId))
+    const res = await fetch(
+      `${API_BASE_URL}/api/articles/refresh/stream?${qs}`,
+      { method: "POST", headers: { Accept: "text/event-stream" } }
+    )
+    if (!res.ok || !res.body) {
+      throw new Error(`HTTP ${res.status}`)
+    }
+
+    const reader = res.body.getReader()
+    const decoder = new TextDecoder()
+    let buffer = ""
+
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
+
+      buffer += decoder.decode(value, { stream: true })
+      // SSE events are separated by double newlines
+      const events = buffer.split("\n\n")
+      buffer = events.pop() ?? ""
+
+      for (const block of events) {
+        if (!block.trim()) continue
+        let eventType = "article"
+        let dataLine = ""
+        for (const line of block.split("\n")) {
+          if (line.startsWith("event: ")) eventType = line.slice(7).trim()
+          else if (line.startsWith("data: ")) dataLine = line.slice(6)
+        }
+        if (!dataLine) continue
+        try {
+          const parsed = JSON.parse(dataLine)
+          if (eventType === "done") onDone(parsed)
+          else if (eventType === "error") onError(parsed.message)
+          else onArticle(parsed as BackendArticle)
+        } catch { /* malformed chunk */ }
+      }
+    }
   },
 
   deleteAllArticles(): Promise<{ message: string }> {
